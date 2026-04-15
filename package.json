@@ -1,0 +1,50 @@
+{
+  "name": "react-router-actions",
+  "version": "0.1.0",
+  "description": "A type-safe action system for handling client-side form submissions and API calls in React Router.",
+  "type": "module",
+  "main": "dist/index.cjs",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "react-router",
+    "actions",
+    "type-safe",
+    "form-data",
+    "client-actions"
+  ],
+  "author": "",
+  "license": "ISC",
+  "peerDependencies": {
+    "react-router": ">=7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.18",
+    "react-router": "^7.6.1",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.4"
+  }
+}
