@@ -19,3 +19,4 @@ export type { ActionObject, ActionResult } from "./action-object";
 // ─── React Router Adapter ────────────────────────────────────────
 
 export { ActionsProvider, useAction, resolveFormData } from "./adapter";
+export type { ActionEvent, ActionEventHandler } from "./adapter";

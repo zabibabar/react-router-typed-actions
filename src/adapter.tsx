@@ -6,6 +6,7 @@ import {
   useEffect,
   useMemo,
   useRef,
+  useCallback,
   type ReactNode,
   type ReactElement,
 } from "react";
@@ -16,11 +17,45 @@ import { createActionsFactory } from "./factory";
 import type { ActionObject, ActionResult } from "./action-object";
 import { deserialize, type FileEntry } from "./serialization";
 
+// ─── Action Events ───────────────────────────────────────────────
+
+export type ActionEvent =
+  | { phase: "submit"; type: string; name: string; payload: unknown; timestamp: number }
+  | { phase: "success"; type: string; name: string; result: unknown; duration: number; timestamp: number }
+  | { phase: "error"; type: string; name: string; error: unknown; duration: number; timestamp: number };
+
+export type ActionEventHandler = (event: ActionEvent) => void;
+
+function defaultDebugLogger(event: ActionEvent): void {
+  const tag = "react-router-actions";
+  switch (event.phase) {
+    case "submit":
+      console.groupCollapsed(`[${tag}] ▶ ${event.name}`);
+      console.log("type:", event.type);
+      console.log("payload:", event.payload);
+      console.groupEnd();
+      break;
+    case "success":
+      console.groupCollapsed(`[${tag}] ✓ ${event.name} (${event.duration}ms)`);
+      console.log("type:", event.type);
+      console.log("result:", event.result);
+      console.groupEnd();
+      break;
+    case "error":
+      console.groupCollapsed(`[${tag}] ✗ ${event.name} (${event.duration}ms)`);
+      console.log("type:", event.type);
+      console.log("error:", event.error);
+      console.groupEnd();
+      break;
+  }
+}
+
 // ─── Module-level singleton ──────────────────────────────────────
 
 type Factory = ReturnType<typeof createActionsFactory>;
 
 let _factory: Factory | null = null;
+let _emitEvent: ActionEventHandler | null = null;
 let _mountCount = 0;
 
 function getFactory(): Factory {
@@ -35,22 +70,42 @@ function getFactory(): Factory {
 
 // ─── Context ─────────────────────────────────────────────────────
 
-const ActionsContext = createContext<Factory | null>(null);
+interface ActionsContextValue {
+  factory: Factory;
+  emitEvent: ActionEventHandler | null;
+}
+
+const ActionsContext = createContext<ActionsContextValue | null>(null);
 
 // ─── ActionsProvider ─────────────────────────────────────────────
 
 export interface ActionsProviderProps {
   actions: ActionDefinition<string, any, any, any>[];
+  debug?: boolean;
+  onAction?: ActionEventHandler;
   children: ReactNode;
 }
 
 export function ActionsProvider({
   actions,
+  debug = false,
+  onAction,
   children,
 }: ActionsProviderProps): ReactElement {
   const factory = useMemo(() => createActionsFactory(actions), [actions]);
 
+  const emitEvent = useCallback<ActionEventHandler>(
+    (event) => {
+      if (debug) defaultDebugLogger(event);
+      onAction?.(event);
+    },
+    [debug, onAction],
+  );
+
+  const hasListeners = debug || onAction;
+
   _factory = factory;
+  _emitEvent = hasListeners ? emitEvent : null;
 
   useEffect(() => {
     _mountCount++;
@@ -64,12 +119,18 @@ export function ActionsProvider({
       _mountCount--;
       if (_mountCount === 0) {
         _factory = null;
+        _emitEvent = null;
       }
     };
   }, []);
 
+  const contextValue = useMemo<ActionsContextValue>(
+    () => ({ factory, emitEvent: hasListeners ? emitEvent : null }),
+    [factory, emitEvent, hasListeners],
+  );
+
   return (
-    <ActionsContext.Provider value={factory}>
+    <ActionsContext.Provider value={contextValue}>
       {children}
     </ActionsContext.Provider>
   );
@@ -98,17 +159,28 @@ export function useAction<
   action: ActionCreator<TType, TPayload, TResult, TContext>,
   options?: UseActionOptions<TResult>,
 ): [submit: (payload: TPayload) => void, state: UseActionState<TResult, TPayload>] {
-  const factory = useContext(ActionsContext);
-  if (!factory) {
+  const ctx = useContext(ActionsContext);
+  if (!ctx) {
     throw new Error(
       "react-router-actions: useAction must be used within an <ActionsProvider>.",
     );
   }
 
+  const { factory, emitEvent } = ctx;
   const fetcher = useFetcher<ActionResult<TResult>>();
   const prevDataRef = useRef<ActionResult<TResult> | undefined>(undefined);
+  const submitTimestampRef = useRef<number>(0);
 
   const submit = (payload: TPayload) => {
+    submitTimestampRef.current = Date.now();
+    emitEvent?.({
+      phase: "submit",
+      type: action.type,
+      name: action.name,
+      payload,
+      timestamp: submitTimestampRef.current,
+    });
+
     const { formData, method } = factory.createFormData(
       action.type,
       payload,
@@ -124,9 +196,30 @@ export function useAction<
     if (data === undefined || data === prevDataRef.current) return;
     prevDataRef.current = data;
 
+    const duration = submitTimestampRef.current
+      ? Date.now() - submitTimestampRef.current
+      : 0;
+    const timestamp = Date.now();
+
     if (data.success) {
+      emitEvent?.({
+        phase: "success",
+        type: action.type,
+        name: action.name,
+        result: data.response,
+        duration,
+        timestamp,
+      });
       options?.onSuccess?.(data.response);
     } else {
+      emitEvent?.({
+        phase: "error",
+        type: action.type,
+        name: action.name,
+        error: data.error,
+        duration,
+        timestamp,
+      });
       options?.onError?.(data.error);
     }
   }, [fetcher.data]);
