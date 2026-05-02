@@ -1,18 +1,11 @@
 import { describe, it, expect, expectTypeOf } from "vitest";
-import {
-  defineAction,
-  buildActionModule,
-  type ActionDefinition,
-  type InferPayloadMap,
-  type InferActionMap,
-  type InferActions,
-} from "../define-action";
+import { defineAction, type ActionCreator } from "../define-action";
+import type { ActionObject } from "../action-object";
 
 // ─── Fixtures ────────────────────────────────────────────────────
 
 const createItem = defineAction({
   type: "createItem",
-  method: "post",
   resolve: (payload: { title: string }) => ({ id: "123", title: payload.title }),
   successMessage: (payload) => `Item "${payload.title}" created`,
   errorMessage: "Failed to create item",
@@ -28,114 +21,131 @@ const deleteItem = defineAction({
 
 const contextAction = defineAction({
   type: "contextAction",
-  method: "post",
   resolve: (payload: { name: string }, context: { token: string }) => ({
     name: payload.name,
     token: context.token,
   }),
-  successMessage: "Done",
-  errorMessage: "Failed",
 });
 
-// ─── defineAction ────────────────────────────────────────────────
+const minimalAction = defineAction({
+  type: "minimal",
+  resolve: (payload: { x: number }) => payload.x * 2,
+});
+
+// ─── defineAction returns ActionCreator ──────────────────────────
 
 describe("defineAction", () => {
-  it("returns an object with the correct shape", () => {
+  it("returns an ActionCreator with definition properties", () => {
     expect(createItem.type).toBe("createItem");
     expect(createItem.method).toBe("post");
+    expect(createItem.name).toBe("createItem");
     expect(typeof createItem.resolve).toBe("function");
     expect(typeof createItem.successMessage).toBe("function");
     expect(createItem.errorMessage).toBe("Failed to create item");
   });
 
-  it("supports string messages", () => {
-    expect(deleteItem.successMessage).toBe("Item deleted");
-    expect(createItem.errorMessage).toBe("Failed to create item");
+  it("defaults method to 'post'", () => {
+    expect(minimalAction.method).toBe("post");
   });
 
-  it("supports function messages", () => {
-    const successMsg = createItem.successMessage;
-    expect(typeof successMsg).toBe("function");
-    if (typeof successMsg === "function") {
-      expect(successMsg({ title: "Widget" })).toBe('Item "Widget" created');
-    }
-
-    const errorMsg = deleteItem.errorMessage;
-    expect(typeof errorMsg).toBe("function");
-    if (typeof errorMsg === "function") {
-      expect(errorMsg({ id: "42" })).toBe("Failed to delete item 42");
-    }
+  it("defaults name to type", () => {
+    expect(minimalAction.name).toBe("minimal");
   });
 
-  it("resolve is callable with void context", () => {
-    const result = createItem.resolve({ title: "Test" }, undefined as void);
+  it("uses explicit name when provided", () => {
+    const action = defineAction({
+      type: "custom",
+      name: "[Campaign] Create Campaign",
+      resolve: () => null,
+    });
+    expect(action.name).toBe("[Campaign] Create Campaign");
+  });
+
+  it("uses explicit method when provided", () => {
+    expect(deleteItem.method).toBe("delete");
+  });
+
+  it("leaves successMessage/errorMessage undefined when omitted", () => {
+    expect(minimalAction.successMessage).toBeUndefined();
+    expect(minimalAction.errorMessage).toBeUndefined();
+  });
+});
+
+// ─── ActionCreator is callable ───────────────────────────────────
+
+describe("ActionCreator callable", () => {
+  it("produces an ActionObject with correct shape", () => {
+    const action = createItem({ title: "Widget" });
+    expect(action.type).toBe("createItem");
+    expect(action.name).toBe("createItem");
+    expect(action.method).toBe("post");
+    expect(action.payload).toEqual({ title: "Widget" });
+    expect(typeof action.resolve).toBe("function");
+  });
+
+  it("resolve returns the expected result", async () => {
+    const action = createItem({ title: "Test" });
+    const result = await action.resolve();
     expect(result).toEqual({ id: "123", title: "Test" });
   });
 
-  it("resolve receives context when defined", () => {
-    const result = contextAction.resolve({ name: "test" }, { token: "abc" });
+  it("resolve receives context when defined", async () => {
+    const action = contextAction({ name: "test" });
+    const result = await action.resolve({ token: "abc" });
     expect(result).toEqual({ name: "test", token: "abc" });
   });
-});
 
-// ─── buildActionModule ───────────────────────────────────────────
-
-describe("buildActionModule", () => {
-  it("returns the same object passed in", () => {
-    const module = buildActionModule({ createItem, deleteItem });
-    expect(module.createItem).toBe(createItem);
-    expect(module.deleteItem).toBe(deleteItem);
+  it("successMessage resolves from definition after resolve", async () => {
+    const action = createItem({ title: "Widget" });
+    await action.resolve();
+    expect(action.successMessage).toBe('Item "Widget" created');
   });
 
-  it("accepts modules with explicit TContext", () => {
-    const module = buildActionModule<{ token: string }>({ contextAction });
-    expect(module.contextAction).toBe(contextAction);
+  it("errorMessage resolves from definition", () => {
+    const action = deleteItem({ id: "42" });
+    expect(action.errorMessage).toBe("Failed to delete item 42");
   });
 
-  it("rejects key/type mismatch at compile time", () => {
-    // @ts-expect-error — key "wrong" does not match action type "createItem"
-    buildActionModule({ wrong: createItem });
+  it("messages are undefined when definition omits them", () => {
+    const action = minimalAction({ x: 5 });
+    expect(action.successMessage).toBeUndefined();
+    expect(action.errorMessage).toBeUndefined();
   });
 });
 
-// ─── Type Tests ──────────────────────────────────────────────────
+// ─── Type tests ──────────────────────────────────────────────────
 
 describe("type inference", () => {
-  const module = buildActionModule({ createItem, deleteItem });
-
-  it("defineAction preserves literal type", () => {
+  it("preserves literal type", () => {
     expectTypeOf(createItem.type).toEqualTypeOf<"createItem">();
     expectTypeOf(deleteItem.type).toEqualTypeOf<"deleteItem">();
   });
 
-  it("ActionDefinition interface matches defineAction output", () => {
+  it("ActionCreator is assignable to its type", () => {
     expectTypeOf(createItem).toMatchTypeOf<
-      ActionDefinition<"createItem", { title: string }>
+      ActionCreator<"createItem", { title: string }>
     >();
   });
 
-  it("InferPayloadMap extracts payload types", () => {
-    type Payloads = InferPayloadMap<typeof module>;
-    expectTypeOf<Payloads["createItem"]>().toEqualTypeOf<{ title: string }>();
-    expectTypeOf<Payloads["deleteItem"]>().toEqualTypeOf<{ id: string }>();
+  it("calling the creator returns ActionObject<void> for void context", () => {
+    const action = createItem({ title: "x" });
+    expectTypeOf(action).toMatchTypeOf<ActionObject<void>>();
   });
 
-  it("InferActionMap maps keys to definitions", () => {
-    type Map = InferActionMap<typeof module>;
-    expectTypeOf<Map["createItem"]>().toEqualTypeOf<typeof createItem>();
-    expectTypeOf<Map["deleteItem"]>().toEqualTypeOf<typeof deleteItem>();
+  it("calling the creator returns ActionObject<TContext> for typed context", () => {
+    const action = contextAction({ name: "x" });
+    expectTypeOf(action).toMatchTypeOf<ActionObject<{ token: string }>>();
   });
 
-  it("InferActions is a union of definitions", () => {
-    type Actions = InferActions<typeof module>;
-    expectTypeOf<Actions>().toEqualTypeOf<
-      typeof createItem | typeof deleteItem
+  it("resolve on void-context ActionObject takes no args", () => {
+    const action = createItem({ title: "x" });
+    expectTypeOf(action.resolve).toEqualTypeOf<() => Promise<unknown>>();
+  });
+
+  it("resolve on typed-context ActionObject requires context", () => {
+    const action = contextAction({ name: "x" });
+    expectTypeOf(action.resolve).toEqualTypeOf<
+      (context: { token: string }) => Promise<unknown>
     >();
-  });
-
-  it("TContext flows through to resolve signature", () => {
-    const ctxModule = buildActionModule<{ token: string }>({ contextAction });
-    type Resolve = (typeof ctxModule)["contextAction"]["resolve"];
-    expectTypeOf<Parameters<Resolve>[1]>().toEqualTypeOf<{ token: string }>();
   });
 });

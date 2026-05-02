@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+import { buildActionObject, type ActionObject } from "./action-object";
+
+// ─── Core types ───────────────────────────────────────────────────
+
 export type ActionMethod = "get" | "post" | "put" | "patch" | "delete";
 
-export type MessageFactory<TPayload> = string | ((payload: TPayload) => string);
-
-export interface SchemaLike<T = unknown> {
-  parse(data: unknown): T;
-}
+export type MessageFactory<TPayload> =
+  | string
+  | ((payload: TPayload) => string);
 
 export interface ActionDefinition<
   TType extends string = string,
@@ -15,15 +17,28 @@ export interface ActionDefinition<
   TContext = void,
 > {
   readonly type: TType;
+  readonly name: string;
   readonly method: ActionMethod;
   readonly resolve: (
     payload: TPayload,
     context: TContext,
   ) => TResult | Promise<TResult>;
-  readonly successMessage: MessageFactory<TPayload>;
-  readonly errorMessage: MessageFactory<TPayload>;
-  readonly schema?: SchemaLike<TPayload>;
+  readonly successMessage?: MessageFactory<TPayload>;
+  readonly errorMessage?: MessageFactory<TPayload>;
 }
+
+// ─── ActionCreator ────────────────────────────────────────────────
+
+export type ActionCreator<
+  TType extends string = string,
+  TPayload = unknown,
+  TResult = unknown,
+  TContext = void,
+> = {
+  (payload: TPayload): ActionObject<TContext>;
+} & ActionDefinition<TType, TPayload, TResult, TContext>;
+
+// ─── defineAction ─────────────────────────────────────────────────
 
 export function defineAction<
   TType extends string,
@@ -32,62 +47,51 @@ export function defineAction<
   TContext = void,
 >(config: {
   type: TType;
-  method: ActionMethod;
-  resolve: (payload: TPayload, context: TContext) => TResult | Promise<TResult>;
-  successMessage: MessageFactory<TPayload>;
-  errorMessage: MessageFactory<TPayload>;
-  schema?: SchemaLike<TPayload>;
-}): ActionDefinition<TType, TPayload, TResult, TContext> {
-  return config;
+  name?: string;
+  method?: ActionMethod;
+  resolve: (
+    payload: TPayload,
+    context: TContext,
+  ) => TResult | Promise<TResult>;
+  successMessage?: MessageFactory<TPayload>;
+  errorMessage?: MessageFactory<TPayload>;
+}): ActionCreator<TType, TPayload, TResult, TContext> {
+  const definition: ActionDefinition<TType, TPayload, TResult, TContext> = {
+    type: config.type,
+    name: config.name ?? config.type,
+    method: config.method ?? "post",
+    resolve: config.resolve,
+    successMessage: config.successMessage,
+    errorMessage: config.errorMessage,
+  };
+
+  const creator = ((payload: TPayload) =>
+    buildActionObject(definition as ActionDefinition<string, any, any, TContext>, payload)) as ActionCreator<
+    TType,
+    TPayload,
+    TResult,
+    TContext
+  >;
+
+  Object.defineProperty(creator, "name", {
+    value: definition.name,
+    configurable: true,
+  });
+
+  Object.assign(creator, {
+    type: definition.type,
+    method: definition.method,
+    resolve: definition.resolve,
+    successMessage: definition.successMessage,
+    errorMessage: definition.errorMessage,
+  });
+
+  return creator;
 }
 
-// ─── Action Module ───────────────────────────────────────────────
+// ─── Backward-compat (consumed by factory until Task 3) ──────────
 
 export type ActionDefinitionRecord<TContext = void> = Record<
   string,
   ActionDefinition<string, any, any, TContext>
 >;
-
-type ValidateActionKeys<
-  T extends Record<string, ActionDefinition<string, any, any, any>>,
-> = {
-  [K in keyof T]: T[K] extends ActionDefinition<infer TType, any, any, any>
-    ? TType extends K
-      ? T[K]
-      : never
-    : never;
-};
-
-export function buildActionModule<
-  TContext = void,
-  T extends ActionDefinitionRecord<TContext> = ActionDefinitionRecord<TContext>,
->(definitions: T & ValidateActionKeys<T>): T {
-  return definitions;
-}
-
-// ─── Type Utilities ──────────────────────────────────────────────
-
-/** `{ [actionType]: payloadType }` map extracted from an action module. */
-export type InferPayloadMap<T extends ActionDefinitionRecord<any>> = {
-  [K in keyof T]: T[K] extends ActionDefinition<any, infer P, any, any>
-    ? P
-    : never;
-};
-
-/** `{ [actionType]: ActionDefinition }` map — use for ActionRegistry augmentation. */
-export type InferActionMap<T extends ActionDefinitionRecord<any>> = {
-  [K in keyof T]: T[K];
-};
-
-/** Union of all action definitions in a module. */
-export type InferActions<T extends ActionDefinitionRecord<any>> = T[keyof T];
-
-/**
- * Augment this interface for global type safety with `useAction` and `createAction`.
- *
- * @example
- * declare module "react-router-actions" {
- *   interface ActionRegistry extends InferActionMap<typeof allActions> {}
- * }
- */
-export interface ActionRegistry {}
