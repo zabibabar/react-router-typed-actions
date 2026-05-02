@@ -144,6 +144,18 @@ export function createActionsFactory<T extends ActionDefinitionRecord<any>>(
 
     const payload = deserialize(encodedPayload, files);
 
+    if (def.schema) {
+      try {
+        def.schema.parse(payload);
+      } catch (err) {
+        const detail =
+          err instanceof Error ? err.message : JSON.stringify(err);
+        throw new Error(
+          `react-router-actions: Payload validation failed for action "${actionType}". ${detail}`,
+        );
+      }
+    }
+
     const rawOptions = formData.get("options");
     const options: ActionOptions | undefined =
       typeof rawOptions === "string" ? JSON.parse(rawOptions) : undefined;

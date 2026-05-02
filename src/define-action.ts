@@ -4,6 +4,10 @@ export type ActionMethod = "get" | "post" | "put" | "patch" | "delete";
 
 export type MessageFactory<TPayload> = string | ((payload: TPayload) => string);
 
+export interface SchemaLike<T = unknown> {
+  parse(data: unknown): T;
+}
+
 export interface ActionDefinition<
   TType extends string = string,
   TPayload = unknown,
@@ -18,6 +22,7 @@ export interface ActionDefinition<
   ) => TResult | Promise<TResult>;
   readonly successMessage: MessageFactory<TPayload>;
   readonly errorMessage: MessageFactory<TPayload>;
+  readonly schema?: SchemaLike<TPayload>;
 }
 
 export function defineAction<
@@ -31,6 +36,7 @@ export function defineAction<
   resolve: (payload: TPayload, context: TContext) => TResult | Promise<TResult>;
   successMessage: MessageFactory<TPayload>;
   errorMessage: MessageFactory<TPayload>;
+  schema?: SchemaLike<TPayload>;
 }): ActionDefinition<TType, TPayload, TResult, TContext> {
   return config;
 }
