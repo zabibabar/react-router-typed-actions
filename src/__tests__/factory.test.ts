@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { defineAction, buildActionModule } from "../define-action";
+import { defineAction } from "../define-action";
 import { createActionsFactory } from "../factory";
+import { withMessageOverrides } from "../with-message-overrides";
 
 // ─── Fixtures ────────────────────────────────────────────────────
 
 const createItem = defineAction({
   type: "createItem",
-  method: "post",
   resolve: (payload: { title: string }) => ({
     id: "123",
     title: payload.title,
@@ -25,33 +25,37 @@ const deleteItem = defineAction({
 
 const dynamicAction = defineAction({
   type: "dynamicAction",
-  method: "post",
-  resolve: (payload: { name: string }) => ({
-    data: { processed: true },
-    successMessage: `${payload.name} processed successfully`,
-  }),
+  resolve: (payload: { name: string }) =>
+    withMessageOverrides(
+      { processed: true },
+      { successMessage: `${payload.name} processed successfully` },
+    ),
   successMessage: "Default success",
   errorMessage: "Default error",
 });
 
 const dynamicErrorAction = defineAction({
   type: "dynamicErrorAction",
-  method: "post",
-  resolve: (payload: { name: string }) => ({
-    data: null,
-    errorMessage: `${payload.name} failed dynamically`,
-  }),
+  resolve: (payload: { name: string }) =>
+    withMessageOverrides(null, {
+      errorMessage: `${payload.name} failed dynamically`,
+    }),
   successMessage: "Default success",
   errorMessage: "Default error",
 });
 
-const module = buildActionModule({
+const noMessageAction = defineAction({
+  type: "noMessageAction",
+  resolve: (payload: { x: number }) => payload.x * 2,
+});
+
+const factory = createActionsFactory([
   createItem,
   deleteItem,
   dynamicAction,
   dynamicErrorAction,
-});
-const factory = createActionsFactory(module);
+  noMessageAction,
+]);
 
 // ─── createFormData / resolveFormData round-trip ─────────────────
 
@@ -65,6 +69,7 @@ describe("createFormData / resolveFormData round-trip", () => {
 
     const action = factory.resolveFormData(formData);
     expect(action.type).toBe("createItem");
+    expect(action.name).toBe("createItem");
     expect(action.method).toBe("post");
     expect(action.payload).toEqual({ title: "Widget" });
   });
@@ -72,12 +77,9 @@ describe("createFormData / resolveFormData round-trip", () => {
   it("round-trips a Date in payload via SuperJSON", () => {
     const dateAction = defineAction({
       type: "dateAction",
-      method: "post",
       resolve: (p: { ts: Date }) => p,
-      successMessage: "ok",
-      errorMessage: "fail",
     });
-    const f = createActionsFactory(buildActionModule({ dateAction }));
+    const f = createActionsFactory([dateAction]);
 
     const date = new Date("2025-06-15T12:00:00Z");
     const { formData } = f.createFormData("dateAction", { ts: date });
@@ -88,12 +90,9 @@ describe("createFormData / resolveFormData round-trip", () => {
   it("round-trips a File in payload", () => {
     const fileAction = defineAction({
       type: "fileAction",
-      method: "post",
       resolve: (p: { doc: File }) => ({ ok: true }),
-      successMessage: "ok",
-      errorMessage: "fail",
     });
-    const f = createActionsFactory(buildActionModule({ fileAction }));
+    const f = createActionsFactory([fileAction]);
 
     const file = new File(["content"], "test.txt", { type: "text/plain" });
     const { formData } = f.createFormData("fileAction", { doc: file });
@@ -103,66 +102,62 @@ describe("createFormData / resolveFormData round-trip", () => {
     const action = f.resolveFormData(formData);
     expect((action.payload as { doc: File }).doc).toBeInstanceOf(Blob);
   });
-
-  it("round-trips options through FormData", () => {
-    const { formData } = factory.createFormData(
-      "createItem",
-      { title: "T" },
-      { successMessageOverride: "Custom!" },
-    );
-    const action = factory.resolveFormData(formData);
-    expect(action.successMessage).toBe("Custom!");
-  });
 });
 
-// ─── createAction ────────────────────────────────────────────────
+// ─── ActionObject from resolveFormData ───────────────────────────
 
-describe("createAction", () => {
-  it("returns an action object with correct shape", () => {
-    const action = factory.createAction("createItem", { title: "Hello" });
+describe("ActionObject from resolveFormData", () => {
+  it("has correct shape", () => {
+    const { formData } = factory.createFormData("createItem", {
+      title: "Hello",
+    });
+    const action = factory.resolveFormData(formData);
     expect(action.type).toBe("createItem");
+    expect(action.name).toBe("createItem");
     expect(action.method).toBe("post");
     expect(action.payload).toEqual({ title: "Hello" });
     expect(typeof action.resolve).toBe("function");
-    expect(typeof action.successMessage).toBe("string");
-    expect(typeof action.errorMessage).toBe("string");
   });
 
   it("resolve returns the expected result", async () => {
-    const action = factory.createAction("createItem", { title: "Test" });
+    const { formData } = factory.createFormData("createItem", {
+      title: "Test",
+    });
+    const action = factory.resolveFormData(formData);
     const result = await action.resolve(undefined);
     expect(result).toEqual({ id: "123", title: "Test" });
   });
 
-  it("resolves function-based successMessage with payload", () => {
-    const action = factory.createAction("createItem", { title: "Widget" });
+  it("resolves function-based successMessage with payload", async () => {
+    const { formData } = factory.createFormData("createItem", {
+      title: "Widget",
+    });
+    const action = factory.resolveFormData(formData);
+    await action.resolve(undefined);
     expect(action.successMessage).toBe('Item "Widget" created');
   });
 
   it("resolves function-based errorMessage with payload", () => {
-    const action = factory.createAction("deleteItem", { id: "42" });
+    const { formData } = factory.createFormData("deleteItem", { id: "42" });
+    const action = factory.resolveFormData(formData);
     expect(action.errorMessage).toBe("Failed to delete 42");
   });
 
-  it("returns static string messages as-is", () => {
-    const action = factory.createAction("deleteItem", { id: "1" });
-    expect(action.successMessage).toBe("Deleted");
+  it("returns undefined for optional messages", () => {
+    const { formData } = factory.createFormData("noMessageAction", { x: 5 });
+    const action = factory.resolveFormData(formData);
+    expect(action.successMessage).toBeUndefined();
+    expect(action.errorMessage).toBeUndefined();
   });
 });
 
 // ─── Invalid / missing input ─────────────────────────────────────
 
 describe("invalid / missing input", () => {
-  it("throws for unknown action type in createAction", () => {
-    expect(() =>
-      factory.createAction("nonExistent" as never, {} as never),
-    ).toThrow('Unknown action type "nonExistent"');
-  });
-
   it("throws for unknown action type in createFormData", () => {
-    expect(() =>
-      factory.createFormData("nonExistent" as never, {} as never),
-    ).toThrow('Unknown action type "nonExistent"');
+    expect(() => factory.createFormData("nonExistent", {})).toThrow(
+      'Unknown action type "nonExistent"',
+    );
   });
 
   it("throws for missing actionType in FormData", () => {
@@ -191,53 +186,50 @@ describe("invalid / missing input", () => {
   });
 });
 
-// ─── Dynamic messages from resolve ───────────────────────────────
+// ─── withMessageOverrides round-trip ─────────────────────────────
 
-describe("dynamic messages from resolve", () => {
+describe("withMessageOverrides through resolve", () => {
   it("returns static default before resolve is called", () => {
-    const action = factory.createAction("dynamicAction", { name: "Test" });
+    const { formData } = factory.createFormData("dynamicAction", {
+      name: "Test",
+    });
+    const action = factory.resolveFormData(formData);
     expect(action.successMessage).toBe("Default success");
   });
 
   it("returns dynamic successMessage after resolve", async () => {
-    const action = factory.createAction("dynamicAction", {
+    const { formData } = factory.createFormData("dynamicAction", {
       name: "TestItem",
     });
+    const action = factory.resolveFormData(formData);
     await action.resolve(undefined);
     expect(action.successMessage).toBe("TestItem processed successfully");
   });
 
   it("returns dynamic errorMessage after resolve", async () => {
-    const action = factory.createAction("dynamicErrorAction", {
+    const { formData } = factory.createFormData("dynamicErrorAction", {
       name: "BadItem",
     });
+    const action = factory.resolveFormData(formData);
     await action.resolve(undefined);
     expect(action.errorMessage).toBe("BadItem failed dynamically");
   });
 
+  it("unwraps data from MessageOverrideResult", async () => {
+    const { formData } = factory.createFormData("dynamicAction", {
+      name: "Test",
+    });
+    const action = factory.resolveFormData(formData);
+    const result = await action.resolve(undefined);
+    expect(result).toEqual({ processed: true });
+  });
+
   it("keeps static message when resolve returns raw data", async () => {
-    const action = factory.createAction("createItem", { title: "Widget" });
+    const { formData } = factory.createFormData("createItem", {
+      title: "Widget",
+    });
+    const action = factory.resolveFormData(formData);
     await action.resolve(undefined);
     expect(action.successMessage).toBe('Item "Widget" created');
-  });
-
-  it("options override takes precedence over dynamic message", async () => {
-    const action = factory.createAction(
-      "dynamicAction",
-      { name: "Test" },
-      { successMessageOverride: "Options win!" },
-    );
-    await action.resolve(undefined);
-    expect(action.successMessage).toBe("Options win!");
-  });
-
-  it("options errorMessageOverride takes precedence over dynamic", async () => {
-    const action = factory.createAction(
-      "dynamicErrorAction",
-      { name: "Test" },
-      { errorMessageOverride: "Forced error" },
-    );
-    await action.resolve(undefined);
-    expect(action.errorMessage).toBe("Forced error");
   });
 });
