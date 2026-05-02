@@ -1,12 +1,12 @@
 # react-router-actions
 
-Type-safe mutations for React Router. Define actions as plain objects, serialize payloads through `FormData` with full type fidelity, and get a typed `useAction` hook that handles pending state, optimistic UI, and error envelopes — with zero per-route boilerplate.
+Type-safe mutations for React Router. Define actions as plain objects, serialize payloads through `FormData` with full type fidelity, and dispatch them with a typed hook — pending state, optimistic UI, lifecycle callbacks, and error envelopes included. Zero per-route boilerplate.
 
 ## The Problem
 
 React Router's `useFetcher` takes untyped `FormData`. Every mutation means hand-rolling `formData.append`, parsing it back in the route `action`, and hoping the payload shape matches on both sides. Across 5, 10, 20+ mutations the pain compounds: inconsistent patterns, no compile-time safety, and tedious FormData plumbing on every route.
 
-`react-router-actions` eliminates this entire category of work. You define each mutation once, register them in a module, and the library handles serialization (including Date, File, Map, Set, BigInt), type inference, and the `useFetcher` wrapper.
+`react-router-actions` eliminates this entire category of work. You define each mutation once, pass them to a provider, and the library handles serialization (including Date, File, Map, Set, BigInt), type inference, and the `useFetcher` wrapper — with `onSuccess`/`onError` callbacks that remove `useEffect` boilerplate.
 
 > **Positioning:** This library pays for itself in apps with **5+ mutation types across multiple routes**. For a single form on a single route, React Router's built-in `action` is simpler.
 
@@ -22,138 +22,76 @@ npm install react-router-actions
 
 ### 1. Define actions
 
-Each domain defines its mutations with `defineAction`:
+Each domain defines its mutations with `defineAction`. Only `type` and `resolve` are required:
 
 ```typescript
-// domain/item/actions.ts
-import { defineAction, buildActionModule } from "react-router-actions";
+// domain/campaign/actions.ts
+import { defineAction } from "react-router-actions";
 
-export const createItem = defineAction({
-  type: "createItem",
-  method: "post",
-  resolve: (payload: { title: string }) =>
-    fetch("/api/items", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    }).then((r) => r.json()),
-  successMessage: (p) => `"${p.title}" created`,
-  errorMessage: "Failed to create item",
+export const createCampaign = defineAction({
+  type: "campaign/create",
+  resolve: (payload: { name: string; budget: number }) =>
+    api.campaigns.create(payload),
+  successMessage: (p) => `"${p.name}" created`,
+  errorMessage: "Failed to create campaign",
 });
 
-export const deleteItem = defineAction({
-  type: "deleteItem",
+export const deleteCampaign = defineAction({
+  type: "campaign/delete",
   method: "delete",
   resolve: (payload: { id: string }) =>
-    fetch(`/api/items/${payload.id}`, { method: "DELETE" }),
-  successMessage: "Item deleted",
-  errorMessage: (p) => `Failed to delete item ${p.id}`,
+    api.campaigns.delete(payload.id),
+  successMessage: "Campaign deleted",
+  errorMessage: (p) => `Failed to delete campaign ${p.id}`,
 });
-
-export const itemActions = buildActionModule({ createItem, deleteItem });
 ```
 
-Keys **must** match each action's `type` — enforced at compile time by `buildActionModule`.
-
-### 2. Register and augment types
-
-Merge domain modules and augment `ActionRegistry` for global type safety:
+Group actions with plain arrays — no module augmentation, no registry interface:
 
 ```typescript
-// app/actions.ts
-import { type InferActionMap } from "react-router-actions";
-import { itemActions } from "~/domain/item/actions";
-import { orderActions } from "~/domain/order/actions";
-
-export const allActions = { ...itemActions, ...orderActions };
-
-declare module "react-router-actions" {
-  interface ActionRegistry extends InferActionMap<typeof allActions> {}
-}
+export const campaignActions = [createCampaign, deleteCampaign];
 ```
 
-### 3. Mount the Provider
+### 2. Mount the Provider
+
+Spread domain arrays into a single flat list:
 
 ```tsx
 // root.tsx
 import { ActionsProvider } from "react-router-actions";
-import { allActions } from "~/actions";
+import { campaignActions } from "~/domain/campaign/actions";
+import { creatorActions } from "~/domain/creator/actions";
 
 export default function Root() {
   return (
-    <ActionsProvider actions={allActions}>
+    <ActionsProvider actions={[...campaignActions, ...creatorActions]}>
       <Outlet />
     </ActionsProvider>
   );
 }
 ```
 
-### 4. Write the route handler
+### 3. Write the route handler
 
 Each route's `clientAction` deserializes and executes the action. You own this function — wire in auth, toasts, error extraction, whatever your app needs:
 
 ```typescript
-// routes/items.tsx
-import { resolveFormData } from "react-router-actions";
+// lib/handle-action.ts
+import { resolveFormData, type ActionResult } from "react-router-actions";
 
-export async function clientAction({ request }: Route.ClientActionArgs) {
+export async function handleAction({
+  request,
+}: {
+  request: Request;
+}): Promise<ActionResult> {
   const formData = await request.formData();
   const action = resolveFormData(formData);
 
   try {
     const response = await action.resolve(undefined);
-    return { type: action.type, success: true as const, response };
+    return { type: action.type, success: true, response };
   } catch (error) {
-    return { type: action.type, success: false as const, error };
-  }
-}
-```
-
-### 5. Use in features
-
-`useAction` is fully typed — payload, pending state, result, and optimistic data:
-
-```tsx
-import { useAction } from "react-router-actions";
-
-function CreateItemButton() {
-  const { submit, isPending } = useAction("createItem");
-
-  return (
-    <button onClick={() => submit({ title: "Widget" })} disabled={isPending}>
-      {isPending ? "Creating..." : "Create"}
-    </button>
-  );
-}
-```
-
-That's it. Install to working mutation in under 2 minutes.
-
-## Handler Recipe
-
-The route `clientAction` is yours to customize. Here's a production-ready recipe with auth injection, toast callbacks, and error extraction:
-
-```typescript
-// lib/action-handler.ts
-import { resolveFormData, type ActionObject } from "react-router-actions";
-import { auth } from "~/auth";
-import { toast } from "~/toast";
-
-export async function handleAction({ request }: { request: Request }) {
-  const formData = await request.formData();
-  const action = resolveFormData(formData);
-
-  try {
-    const token = await auth.getTokenSilently();
-    const response = await action.resolve(token);
-
-    // successMessage can be a lazy () => string for dynamic messages
-    toast.success(action.successMessage);
-    return { type: action.type, success: true as const, response };
-  } catch (err) {
-    toast.error(action.errorMessage);
-    const error = err instanceof Error ? err.message : String(err);
-    return { type: action.type, success: false as const, error };
+    return { type: action.type, success: false, error };
   }
 }
 ```
@@ -161,45 +99,128 @@ export async function handleAction({ request }: { request: Request }) {
 Then every route is a one-liner:
 
 ```typescript
-import { handleAction } from "~/lib/action-handler";
+import { handleAction } from "~/lib/handle-action";
 
 export async function clientAction(args: Route.ClientActionArgs) {
   return handleAction(args);
 }
 ```
 
-### Dynamic messages from `resolve`
+### 4. Use in features
 
-When `resolve` returns `{ data, successMessage?, errorMessage? }` instead of raw data, the action object's message accessors return the overrides:
+Pass the action creator to `useAction`. Types flow from the definition — no strings, no registry:
+
+```tsx
+import { useAction } from "react-router-actions";
+import { createCampaign } from "~/domain/campaign/actions";
+
+function CreateCampaignButton() {
+  const [submit, { pending }] = useAction(createCampaign, {
+    onSuccess: (result) => {
+      // result is typed from createCampaign's resolve return
+      navigate(`/campaigns/${result.id}`);
+    },
+    onError: (error) => {
+      toast.error(String(error));
+    },
+  });
+
+  return (
+    <button
+      onClick={() => submit({ name: "Summer", budget: 5000 })}
+      disabled={pending}
+    >
+      {pending ? "Creating..." : "Create Campaign"}
+    </button>
+  );
+}
+```
+
+Install to working mutation in under 2 minutes.
+
+## Optional Fields and Defaults
+
+| Field | Default | Description |
+| --- | --- | --- |
+| `type` | *required* | Unique string identifier |
+| `resolve` | *required* | `(payload, context?) => result` |
+| `method` | `"post"` | HTTP method for `fetcher.submit` |
+| `name` | same as `type` | Display name for logging/devtools |
+| `successMessage` | `undefined` | Static string or `(payload) => string` |
+| `errorMessage` | `undefined` | Static string or `(payload) => string` |
+
+## Handler Recipe with Auth and Toasts
 
 ```typescript
-const uploadFile = defineAction({
-  type: "uploadFile",
-  method: "post",
-  resolve: async (payload: { file: File }) => {
-    const result = await upload(payload.file);
-    return {
-      data: result,
-      successMessage: `Uploaded "${payload.file.name}" (${result.size} bytes)`,
-    };
-  },
-  successMessage: "File uploaded",
-  errorMessage: "Upload failed",
+// lib/handle-action.ts
+import { resolveFormData, type ActionResult } from "react-router-actions";
+import { auth } from "~/auth";
+
+export async function handleAction({
+  request,
+}: {
+  request: Request;
+}): Promise<ActionResult> {
+  const formData = await request.formData();
+  const action = resolveFormData(formData);
+
+  try {
+    const token = await auth.getTokenSilently();
+    const response = await action.resolve(token);
+    return { type: action.type, success: true, response };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    return { type: action.type, success: false, error };
+  }
+}
+```
+
+### Toast Recipe
+
+With `onSuccess`/`onError` on the hook, you wire toasts inline — no `useEffect`:
+
+```tsx
+const [submit, { pending }] = useAction(createCampaign, {
+  onSuccess: () => toast.success("Campaign created!"),
+  onError: (err) => toast.error(String(err)),
 });
 ```
 
-After `action.resolve()` completes, `action.successMessage` returns the dynamic override. Options passed at submit time (`successMessageOverride`) still take highest precedence.
+Or read the action's message factories in the handler:
 
-### Message precedence
+```typescript
+toast.success(action.successMessage);  // from defineAction or withMessageOverrides
+```
 
-1. `options.successMessageOverride` / `options.errorMessageOverride` (highest)
-2. Dynamic override from `resolve` return value
-3. Static string or `(payload) => string` from `defineAction`
+## `withMessageOverrides`
+
+Override an action's static messages dynamically from within `resolve`:
+
+```typescript
+import { defineAction, withMessageOverrides } from "react-router-actions";
+
+const createCampaign = defineAction({
+  type: "campaign/create",
+  resolve: async (payload: { name: string }) => {
+    const result = await api.campaigns.create(payload);
+    if (result.requiresApproval) {
+      return withMessageOverrides(result, {
+        successMessage: `"${payload.name}" created — pending approval`,
+      });
+    }
+    return result;
+  },
+  successMessage: (p) => `"${p.name}" created`,
+  errorMessage: "Failed to create campaign",
+});
+```
+
+When `resolve` returns a plain value, the static messages are used. When it returns a `withMessageOverrides` wrapper, the overrides replace the static messages for that invocation. The data is unwrapped automatically — consumers always see the raw result.
 
 ## Optimistic UI
 
 ```tsx
-const { submit, pendingPayload } = useAction("deleteItem");
+const [submit, { pendingPayload }] = useAction(deleteCampaign);
 const pendingId = pendingPayload?.id ?? null;
 
 const visible = pendingId
@@ -207,70 +228,76 @@ const visible = pendingId
   : items;
 ```
 
-`pendingPayload` is derived from `fetcher.formData` and auto-clears on settle. On error, the row reappears automatically.
+`pendingPayload` is deserialized from `fetcher.formData` and auto-clears on settle. On error, the row reappears automatically.
 
 ## Auth and Context
 
-The `TContext` generic controls what `resolve` receives as its second argument. It defaults to `void`.
+The `TContext` generic controls what `resolve` receives as its second argument. It defaults to `void`:
 
 ```typescript
-// No context needed
+// No context needed — resolve takes only payload
 const simple = defineAction({
   type: "simple",
-  method: "post",
-  resolve: (payload: { name: string }) => doSomething(payload.name),
-  successMessage: "Done",
-  errorMessage: "Failed",
+  resolve: (payload: { name: string }) => doSomething(payload),
 });
 
-// Token-based auth
+// Token-based auth — resolve takes (payload, token)
 const authed = defineAction({
   type: "authed",
-  method: "post",
   resolve: (payload: { id: string }, token: string) =>
-    fetch("/api/items", {
-      headers: { Authorization: `Bearer ${token}` },
-    }),
-  successMessage: "Done",
-  errorMessage: "Failed",
+    api.fetch(payload.id, { token }),
 });
 
-// Rich context object
+// Rich context — resolve takes (payload, ctx)
 const rich = defineAction({
   type: "rich",
-  method: "post",
-  resolve: (payload: Payload, ctx: { token: string; userId: string }) => {
-    // Full context available
-  },
-  successMessage: "Done",
-  errorMessage: "Failed",
+  resolve: (payload: Payload, ctx: { token: string; userId: string }) =>
+    api.mutate(payload, ctx),
 });
 ```
 
-Use `buildActionModule<TContext>()` to enforce that all actions in a module share the same context type:
+The handler passes context when calling `action.resolve(context)`.
+
+## TanStack Query
+
+Call the action creator directly — it returns an `ActionObject` for use outside the React Router fetcher path:
 
 ```typescript
-const secureActions = buildActionModule<string>({ authed });
+import { createCampaign } from "~/domain/campaign/actions";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+
+function useCreateCampaign() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: { name: string; budget: number }) => {
+      const action = createCampaign(payload);
+      return action.resolve();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+    },
+  });
+}
 ```
 
-## Schema Validation
+## Server Actions
 
-`defineAction` accepts an optional `schema` field — any object with a `.parse(data)` method (Zod, Valibot, or a custom validator). The schema is checked during `resolveFormData`, at the deserialization boundary:
+The same action definitions work in React Router server `action` exports. The core (`defineAction`, serialization) has zero React dependencies:
 
 ```typescript
-import { z } from "zod";
+// routes/campaigns.server.ts
+import { resolveFormData, type ActionResult } from "react-router-actions";
 
-const createItem = defineAction({
-  type: "createItem",
-  method: "post",
-  schema: z.object({ title: z.string().min(1), priority: z.number() }),
-  resolve: (payload) => api.createItem(payload),
-  successMessage: "Created",
-  errorMessage: "Failed",
-});
+export async function action({
+  request,
+}: Route.ActionArgs): Promise<ActionResult> {
+  const formData = await request.formData();
+  const action = resolveFormData(formData);
+  const result = await action.resolve(getServerContext());
+  return { type: action.type, success: true, response: result };
+}
 ```
-
-Invalid payloads throw a descriptive error including the action type and validation details. Actions without a schema skip validation entirely.
 
 ## Serialization
 
@@ -278,80 +305,28 @@ Payloads are serialized with [SuperJSON](https://github.com/blitz-js/superjson) 
 
 `File` and `Blob` values are extracted from the payload tree and appended as native `FormData` entries, so they travel over the wire without base64 encoding. On deserialization, they're reinserted at their original paths.
 
-## Server Actions
-
-The same action definitions work in React Router server `action` exports. The core (`defineAction`, `buildActionModule`, `createActionsFactory`) has zero React dependencies:
-
-```typescript
-// routes/items.server.ts (server action)
-import { createActionsFactory } from "react-router-actions";
-import { itemActions } from "~/domain/item/actions";
-
-const factory = createActionsFactory(itemActions);
-
-export async function action({ request }: Route.ActionArgs) {
-  const formData = await request.formData();
-  const action = factory.resolveFormData(formData);
-  const result = await action.resolve(getServerContext());
-  return { type: action.type, success: true, response: result };
-}
-```
-
-## TanStack Query
-
-`createAction` instantiates an action directly — use it inside `useMutation` or any non-fetcher context:
-
-```typescript
-import { createAction } from "react-router-actions";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-
-function useCreateItem() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (payload: { title: string }) => {
-      const action = createAction("createItem", payload);
-      return action.resolve(undefined);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["items"] });
-    },
-  });
-}
-```
-
 ## API Reference
 
 ### Functions
 
 | Export | Description |
 | --- | --- |
-| `defineAction(config)` | Create a typed action definition from a plain object config |
-| `buildActionModule(defs)` | Group action definitions per domain; compile-time key validation |
-| `createActionsFactory(modules)` | Create a factory from merged modules — returns `{ createFormData, resolveFormData, createAction }` |
-| `ActionsProvider` | React component — sets the module singleton and provides context |
-| `useAction(type, options?)` | Typed hook wrapping `useFetcher` — returns `submit`, `isPending`, `data`, `error`, `pendingPayload` |
-| `resolveFormData(formData)` | Deserialize FormData into an action object (reads from singleton) |
-| `createAction(type, payload, options?)` | Instantiate an action by type (reads from singleton) |
+| `defineAction(config)` | Define a callable action creator from a config object |
+| `withMessageOverrides(data, overrides)` | Wrap a resolve return value with dynamic message overrides |
+| `ActionsProvider` | React component — builds the factory and provides context |
+| `useAction(actionCreator, options?)` | Typed hook wrapping `useFetcher` — returns `[submit, state]` tuple |
+| `resolveFormData(formData)` | Deserialize FormData into an ActionObject (reads from singleton) |
 
 ### Types
 
 | Export | Description |
 | --- | --- |
-| `ActionRegistry` | Module augmentation interface for global type safety |
-| `ActionDefinition<TType, TPayload, TResult, TContext>` | Shape of an action definition object |
-| `ActionDefinitionRecord<TContext>` | Constraint type for maps of action definitions |
+| `ActionCreator<TType, TPayload, TResult, TContext>` | Callable action creator with definition properties |
+| `ActionDefinition<TType, TPayload, TResult, TContext>` | Shape of an action definition (post-defaults) |
+| `ActionObject<TContext>` | Runtime action instance with `resolve`, `payload`, messages |
+| `ActionResult<TResult>` | Discriminated union: `{ success: true, response } \| { success: false, error }` |
 | `ActionMethod` | `"get" \| "post" \| "put" \| "patch" \| "delete"` |
-| `ActionOptions` | Options type (`successMessageOverride`, `errorMessageOverride`) |
-| `ActionObject` | Runtime action instance with `resolve`, `payload`, messages |
-| `ActionResult<K>` | Discriminated union: `{ success: true, response } \| { success: false, error }` |
-| `UseActionReturn<K>` | Return type of `useAction` |
-| `ActionsProviderProps` | Props for `ActionsProvider` |
 | `MessageFactory<TPayload>` | `string \| ((payload: TPayload) => string)` |
-| `SchemaLike<T>` | `{ parse(data: unknown): T }` — compatible with Zod, Valibot, etc. |
-| `InferPayloadMap<T>` | Extract `{ [type]: payload }` map from a module |
-| `InferActionMap<T>` | Extract `{ [type]: ActionDefinition }` map — use for `ActionRegistry` augmentation |
-| `InferActions<T>` | Union of all action definitions in a module |
 
 ## License
 
