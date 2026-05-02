@@ -1,7 +1,7 @@
 # react-router-actions v2 Refactor — Tasks
 
 > Spec: [react-router-actions v2 Refactor](./v2-refactor.md)
-> **Feature status:** in-progress
+> **Feature status:** committed
 
 ### 1. defineAction + type utilities + buildActionModule (AFK)
 Replace the class-based foundation with the functional `defineAction()` API, type inference utilities, and `buildActionModule()` with compile-time key validation.
@@ -91,7 +91,7 @@ Add optional `schema` field to `defineAction` that validates payloads during `re
 ### 6. v1 cleanup — remove old artifacts, update exports (AFK)
 Delete the class-based v1 modules and update the barrel export to the new API surface.
 
-**Status:** pending
+**Status:** committed
 **Blocked by:** 1, 2, 3, 4
 
 **Done when:**
