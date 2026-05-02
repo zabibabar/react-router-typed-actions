@@ -1,21 +1,37 @@
-export { BaseClientAction } from "./base-action";
-export type { BaseClientActionOptions } from "./base-action";
+// ─── Core ────────────────────────────────────────────────────────
+
+export { defineAction, buildActionModule } from "./define-action";
+export type {
+  ActionDefinition,
+  ActionDefinitionRecord,
+  ActionMethod,
+  MessageFactory,
+  SchemaLike,
+  InferPayloadMap,
+  InferActionMap,
+  InferActions,
+  ActionRegistry,
+} from "./define-action";
+
+// ─── Serialization (internal, but types are useful) ──────────────
+
+export type { FileEntry, SerializeResult } from "./serialization";
+
+// ─── Factory ─────────────────────────────────────────────────────
+
+export { createActionsFactory } from "./factory";
+export type { ActionOptions, ActionObject } from "./factory";
+
+// ─── React Router Adapter ────────────────────────────────────────
 
 export {
-  buildActionModule,
-} from "./type-utils";
+  ActionsProvider,
+  useAction,
+  resolveFormData,
+  createAction,
+} from "./adapter";
 export type {
-  ActionConstructorRecord,
-  InferActions,
-  InferPayloadMap,
-  InferClassMap,
-} from "./type-utils";
-
-export { createActionsFactory } from "./actions-factory";
-
-export { createActionHandler } from "./action-handler";
-export type {
-  ActionHandlerReturn,
-  ActionHandlerDependencies,
-  HandleActionOptions,
-} from "./action-handler";
+  ActionsProviderProps,
+  UseActionReturn,
+  ActionResult,
+} from "./adapter";
