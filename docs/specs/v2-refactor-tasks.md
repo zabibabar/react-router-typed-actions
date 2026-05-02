@@ -1,122 +1,106 @@
-# react-router-actions v2 Refactor — Tasks
+# react-router-actions v2 — Tasks
 
-> Spec: [react-router-actions v2 Refactor](./v2-refactor.md)
+> Spec: [react-router-actions v2](./v2-refactor.md)
 > **Feature status:** committed
 
-### 1. defineAction + type utilities + buildActionModule (AFK)
-Replace the class-based foundation with the functional `defineAction()` API, type inference utilities, and `buildActionModule()` with compile-time key validation.
+### 1. `withMessageOverrides` module (AFK)
+New standalone module with symbol-based message override tagging, replacing the duck-typed `isDynamicResult`.
 
 **Status:** committed
-**Blocked by:** None — foundation slice
+**Blocked by:** None — can start immediately
+**Not this task:** Factory integration (Task 3), barrel exports (Task 5)
 
 **Done when:**
-- `defineAction()` accepts a plain object config (type, method, resolve, successMessage, errorMessage) and returns a typed action definition object
-- `successMessage`/`errorMessage` accept both `string` and `(payload) => string`
-- `buildActionModule<TContext>()` validates at compile time that map keys match each action's `type` literal
-- `InferPayloadMap`, `InferActionMap`, `InferActions` correctly extract types from an action module
-- `ActionRegistry` empty interface exists for module augmentation
-- `TContext` generic flows through from module to action resolve signature
-- Unit tests pass for `defineAction` shape, `buildActionModule` key validation, type tests via `expect-type` or `tsd`
+- Implements the `withMessageOverrides`, `isMessageOverride`, `MessageOverrideResult`, and `MessageOverrides` contracts from the spec
+- Symbol-based detection correctly distinguishes tagged results from plain objects that happen to have `data` + `successMessage` fields
+- Tests cover: tagging, detection, null data, empty overrides, false positives on duck-typed objects
+- Existing code is not modified — this is a new module added alongside current code
 
 ---
 
-### 2. Serialization module — SuperJSON + File/Blob hybrid (AFK)
-Build the serialization layer that replaces `JSON.stringify` with SuperJSON and supports File/Blob extraction via native FormData entries.
+### 2. Core types + `defineAction` refactor (AFK)
+Refactor `defineAction` to return a callable `ActionCreator`, apply optional field defaults, remove eliminated exports.
 
 **Status:** committed
-**Blocked by:** None — independent of slice 1
+**Blocked by:** 1
+**Not this task:** Factory internals (Task 3), adapter/hook changes (Task 4), barrel exports (Task 5)
 
 **Done when:**
-- `serialize(payload)` produces a SuperJSON-encoded string and a list of extracted File/Blob entries with their dot-paths
-- `deserialize(encoded, files)` reconstructs the original payload with Files reinserted at their original paths
-- Round-trip tests pass for: Date, Map, Set, BigInt, undefined, RegExp, NaN, Infinity, null, nested objects, arrays
-- Round-trip tests pass for: single File, single Blob, deeply nested File, mixed File + Date payload, multiple Files
-- Edge cases tested: empty payload, payload with no Files, payload with only Files
-- `superjson` is added as a runtime dependency in `package.json`
+- `defineAction` returns an `ActionCreator` matching the spec contract — callable with payload to produce an `ActionObject`, with definition properties (`.type`, `.name`, `.method`) accessible on the creator
+- `method` defaults to `"post"`, `name` defaults to `type`, `successMessage`/`errorMessage` default to `undefined`
+- `ActionObject` interface uses conditional `resolve` signature based on `TContext` (no-arg for void, required arg otherwise)
+- `ActionResult` type exported from factory module
+- `buildActionModule`, `ValidateActionKeys`, `ActionRegistry`, `InferPayloadMap`, `InferActionMap`, `InferActions`, `SchemaLike` are removed
+- Tests cover: callable creator produces correct ActionObject, defaults applied, definition properties accessible, conditional resolve typing
 
 ---
 
-### 3. Action Factory + createAction + dynamic messages (AFK)
-Rewrite the factory to work with `defineAction` output and the new serialization module. Implement `createAction` for non-fetcher contexts. Support `resolve` returning dynamic message overrides.
+### 3. Factory refactor (AFK)
+Update the internal factory to accept a flat array of definitions, integrate `withMessageOverrides` detection, and remove schema validation.
 
 **Status:** committed
 **Blocked by:** 1, 2
+**Not this task:** Adapter/hook changes (Task 4), barrel exports (Task 5)
 
 **Done when:**
-- `createActionsFactory(mergedModules)` returns `{ createFormData, resolveFormData, createAction }`
-- `createFormData(type, payload, options?)` serializes via the new serialization module and returns `{ formData, method }`
-- `resolveFormData(formData)` deserializes and returns an action object with `resolve`, `type`, `method`, `payload`, `successMessage`, `errorMessage`
-- `createAction(type, payload, options?)` returns the same action object shape without going through FormData
-- When `resolve` returns `{ data, successMessage?, errorMessage? }`, the action object's message accessors return the overrides
-- When `resolve` returns raw data, message accessors return the static defaults
-- `successMessageOverride`/`errorMessageOverride` in options still take precedence over everything
-- Unit tests pass: factory round-trips with various payload types, invalid type throws, missing fields throw, createAction shape, dynamic message override from resolve, options override precedence
+- `createActionsFactory` accepts `ActionDefinition[]` and builds lookup map by `type`
+- `buildActionObject` uses `isMessageOverride` (symbol guard) instead of duck-typed `isDynamicResult`
+- Schema validation code removed from `resolveFormData`
+- `ActionObject.resolve` uses conditional `TContext` signature
+- `ActionObject` includes `name` field
+- Round-trip tests updated: `createFormData`/`resolveFormData` with new definition shape, `withMessageOverrides` round-trip through resolve, optional messages (undefined when omitted)
+- Existing factory tests that reference `buildActionModule` or `schema` are updated or removed
 
 ---
 
-### 4. React Router adapter — Provider + useAction + ActionRegistry (AFK)
-Rewrite the provider and hook to work with the new factory. Wire the module singleton, React context, and module augmentation.
+### 4. Adapter refactor (AFK)
+Refactor `ActionsProvider` to accept a flat array and `useAction` to accept an `ActionCreator` with tuple return and lifecycle callbacks.
 
 **Status:** committed
-**Blocked by:** 3
+**Blocked by:** 2, 3
+**Not this task:** Barrel exports (Task 5), README (Task 6)
 
 **Done when:**
-- `ActionsProvider` accepts `actions` prop (merged registry), memoizes the factory, sets the module singleton, and provides React context
-- `useAction(type)` returns `{ submit, isPending, data, error, pendingPayload }` with full type safety from `ActionRegistry` augmentation
-- `submit(payload)` builds FormData via factory and calls `fetcher.submit`
-- `pendingPayload` is derived from `fetcher.formData` and auto-clears on settle
-- `data` is typed as `{ type, success: true, response } | { type, success: false, error }`
-- Throws with clear message if `useAction` is called outside `ActionsProvider`
-- Throws with clear message if singleton is accessed before provider mounts
-- DEV-mode `console.warn` if `ActionsProvider` mounts twice
-- Integration tests pass using `createRoutesStub` or `createMemoryRouter`: submit → clientAction → response round-trip, pending state, error path, outside-provider throw
+- `ActionsProvider` accepts `ActionCreator[]` (or `ActionDefinition[]`), builds factory internally, keys derived from `type`
+- `useAction` accepts an `ActionCreator`, returns `[submitFn, state]` tuple matching the spec contract
+- `onSuccess` fires with unwrapped `TResult` on success, `onError` fires with error on failure — each fires exactly once per settlement via ref-tracked `useEffect`
+- `pendingPayload` deserialized from `fetcher.formData`
+- Strict mode double-mount warning uses `_mountCount > 2` threshold
+- All `ActionRegistry`-based derived types (`RegisteredActionType`, `RegisteredPayload`, `RegisteredResolveReturn`) removed
+- Module-level `resolveFormData` unchanged (reads singleton)
+- Adapter tests updated: tuple return shape, `onSuccess`/`onError` fire correctly, throws outside provider
 
 ---
 
-### 5. Optional schema validation on deserialization boundary (AFK)
-Add optional `schema` field to `defineAction` that validates payloads during `resolveFormData`.
-
-**Status:** committed
-**Blocked by:** 1, 3
-
-**Done when:**
-- `defineAction` accepts an optional `schema` field (any object with `.parse(data)` method)
-- `resolveFormData` validates the deserialized payload against the schema when present
-- Invalid payloads throw a descriptive error with the action type and validation details
-- Actions without a schema skip validation (no behavioral change)
-- Unit tests pass: valid payload with Zod schema, invalid payload throws, no schema skips validation, custom `.parse()` object works
-
----
-
-### 6. v1 cleanup — remove old artifacts, update exports (AFK)
-Delete the class-based v1 modules and update the barrel export to the new API surface.
+### 5. Barrel exports + cleanup (AFK)
+Update `index.ts` to reflect the final public API surface and remove dead code.
 
 **Status:** committed
 **Blocked by:** 1, 2, 3, 4
+**Not this task:** README (Task 6)
 
 **Done when:**
-- `BaseClientAction` class is deleted
-- `createActionHandler` and `handleAction` are deleted
-- `action-handler.ts` is deleted
-- `base-action.ts` is deleted (or fully replaced)
-- `index.ts` barrel exports only v2 API: `defineAction`, `buildActionModule`, `createActionsFactory`, `createAction`, `ActionsProvider`, `useAction`, type utilities, `ActionRegistry`
-- No v1 symbols are reachable from the public API
-- `tsup` build succeeds with the new entry point
-- All existing tests are updated or replaced — no test references v1 classes or handler
+- `index.ts` exports exactly the runtime functions and types listed in the spec's Public API surface table
+- No dead exports remain (`buildActionModule`, `createActionsFactory`, `ActionRegistry`, `SchemaLike`, `createAction`, `InferPayloadMap`, `InferActionMap`, `InferActions`)
+- `yarn typecheck` passes
+- `yarn test` passes (all updated tests green)
+- `schema-validation.test.ts` removed
 
 ---
 
-### 7. Documentation — README, handler recipe (HITL)
-Rewrite the README for v2, document the handler recipe, and server action compatibility.
+### 6. README + documentation (AFK)
+Rewrite the README to reflect the v2 API with usage examples and handler/toast recipes.
 
 **Status:** committed
-**Blocked by:** 1, 2, 3, 4, 5, 6
+**Blocked by:** 1, 2, 3, 4, 5
+**Not this task:** Implementation code changes
 
 **Done when:**
-- README leads with the problem (untyped `fetcher.submit` pain), not the solution
-- Zero-to-working quickstart gets a developer from install to a working mutation in under 2 minutes
-- Handler recipe section shows auth injection, toast callbacks (including lazy `() => string` for dynamic messages), and error extraction
-- Server Actions section demonstrates that the same action definitions work in server `action` exports
-- TanStack Query section shows `createAction` with `useMutation`
-- API reference table covers all public exports
-- Honest positioning: "for apps with 5+ mutation types across multiple routes"
+- Quick-start shows minimal `defineAction` (two required fields), `ActionsProvider`, and `useAction` tuple
+- TanStack Query recipe shows calling the action creator directly (`createCampaign(payload)`)
+- Handler recipe shows user-written `handleAction` with `resolveFormData` and `ActionResult` return type
+- Toast recipe shows `onSuccess`/`onError` wired to a toast library (simplified, no `useEffect`)
+- `withMessageOverrides` usage documented
+- Optional fields (`method`, `name`, `successMessage`, `errorMessage`) documented with defaults
+- Server action compatibility section included
+- No references to removed concepts (`BaseClientAction`, `buildActionModule`, `ActionRegistry`, `declare module`, `createAction`, `schema`)
