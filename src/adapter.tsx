@@ -5,19 +5,15 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   type ReactNode,
+  type ReactElement,
 } from "react";
 import { useFetcher } from "react-router";
-import type {
-  ActionDefinitionRecord,
-  ActionDefinition,
-  ActionRegistry,
-} from "./define-action";
-import {
-  createActionsFactory,
-  type ActionObject,
-  type ActionOptions,
-} from "./factory";
+import type { ActionDefinition } from "./define-action";
+import type { ActionCreator } from "./define-action";
+import { createActionsFactory } from "./factory";
+import type { ActionObject, ActionResult } from "./action-object";
 import { deserialize, type FileEntry } from "./serialization";
 
 // ─── Module-level singleton ──────────────────────────────────────
@@ -31,7 +27,7 @@ function getFactory(): Factory {
   if (!_factory) {
     throw new Error(
       "react-router-actions: ActionsProvider has not been mounted. " +
-        "Wrap your app in <ActionsProvider> before calling resolveFormData or createAction.",
+        "Wrap your app in <ActionsProvider> before calling resolveFormData.",
     );
   }
   return _factory;
@@ -44,18 +40,21 @@ const ActionsContext = createContext<Factory | null>(null);
 // ─── ActionsProvider ─────────────────────────────────────────────
 
 export interface ActionsProviderProps {
-  actions: ActionDefinitionRecord<any>;
+  actions: ActionDefinition<string, any, any, any>[];
   children: ReactNode;
 }
 
-export function ActionsProvider({ actions, children }: ActionsProviderProps) {
+export function ActionsProvider({
+  actions,
+  children,
+}: ActionsProviderProps): ReactElement {
   const factory = useMemo(() => createActionsFactory(actions), [actions]);
 
   _factory = factory;
 
   useEffect(() => {
     _mountCount++;
-    if (process.env.NODE_ENV !== "production" && _mountCount > 1) {
+    if (process.env.NODE_ENV !== "production" && _mountCount > 2) {
       console.warn(
         "react-router-actions: ActionsProvider mounted more than once. " +
           "This may cause unexpected behavior.",
@@ -76,40 +75,29 @@ export function ActionsProvider({ actions, children }: ActionsProviderProps) {
   );
 }
 
-// ─── Derived types from ActionRegistry ───────────────────────────
-
-type RegisteredActionType = keyof ActionRegistry;
-
-type RegisteredPayload<K extends RegisteredActionType> =
-  ActionRegistry[K] extends ActionDefinition<any, infer P, any, any>
-    ? P
-    : never;
-
-type RegisteredResolveReturn<K extends RegisteredActionType> =
-  ActionRegistry[K] extends ActionDefinition<any, any, infer R, any>
-    ? Awaited<R>
-    : never;
-
-// ─── ActionResult ────────────────────────────────────────────────
-
-export type ActionResult<K extends RegisteredActionType> =
-  | { type: K; success: true; response: RegisteredResolveReturn<K> }
-  | { type: K; success: false; error: unknown };
-
 // ─── useAction hook ──────────────────────────────────────────────
 
-export interface UseActionReturn<K extends RegisteredActionType> {
-  submit: (payload: RegisteredPayload<K>, options?: ActionOptions) => void;
-  isPending: boolean;
-  data: ActionResult<K> | undefined;
-  error: string | null;
-  pendingPayload: RegisteredPayload<K> | null;
+export interface UseActionOptions<TResult> {
+  action?: string;
+  onSuccess?: (result: TResult) => void;
+  onError?: (error: unknown) => void;
 }
 
-export function useAction<K extends RegisteredActionType>(
-  type: K,
-  hookOptions?: { action?: string },
-): UseActionReturn<K> {
+export interface UseActionState<TResult, TPayload> {
+  pending: boolean;
+  data: ActionResult<TResult> | undefined;
+  pendingPayload: TPayload | undefined;
+}
+
+export function useAction<
+  TType extends string,
+  TPayload,
+  TResult,
+  TContext,
+>(
+  action: ActionCreator<TType, TPayload, TResult, TContext>,
+  options?: UseActionOptions<TResult>,
+): [submit: (payload: TPayload) => void, state: UseActionState<TResult, TPayload>] {
   const factory = useContext(ActionsContext);
   if (!factory) {
     throw new Error(
@@ -117,27 +105,36 @@ export function useAction<K extends RegisteredActionType>(
     );
   }
 
-  const fetcher = useFetcher<ActionResult<K>>();
+  const fetcher = useFetcher<ActionResult<TResult>>();
+  const prevDataRef = useRef<ActionResult<TResult> | undefined>(undefined);
 
-  const submit = (
-    payload: RegisteredPayload<K>,
-    options?: ActionOptions,
-  ) => {
+  const submit = (payload: TPayload) => {
     const { formData, method } = factory.createFormData(
-      type as string,
+      action.type,
       payload,
-      options,
     );
     fetcher.submit(formData, {
       method,
-      ...(hookOptions?.action ? { action: hookOptions.action } : {}),
+      ...(options?.action ? { action: options.action } : {}),
     });
   };
 
-  const pendingPayload = useMemo<RegisteredPayload<K> | null>(() => {
-    if (!fetcher.formData) return null;
+  useEffect(() => {
+    const data = fetcher.data;
+    if (data === undefined || data === prevDataRef.current) return;
+    prevDataRef.current = data;
+
+    if (data.success) {
+      options?.onSuccess?.(data.response);
+    } else {
+      options?.onError?.(data.error);
+    }
+  }, [fetcher.data]);
+
+  const pendingPayload = useMemo<TPayload | undefined>(() => {
+    if (!fetcher.formData) return undefined;
     const raw = fetcher.formData.get("payload");
-    if (typeof raw !== "string") return null;
+    if (typeof raw !== "string") return undefined;
     try {
       const files: FileEntry[] = [];
       for (const [key, value] of fetcher.formData.entries()) {
@@ -145,34 +142,24 @@ export function useAction<K extends RegisteredActionType>(
           files.push({ path: key.slice(5), file: value });
         }
       }
-      return deserialize(raw, files) as RegisteredPayload<K>;
+      return deserialize(raw, files) as TPayload;
     } catch {
-      return null;
+      return undefined;
     }
   }, [fetcher.formData]);
 
-  return {
+  return [
     submit,
-    isPending: fetcher.state !== "idle",
-    data: fetcher.data,
-    error:
-      fetcher.data && fetcher.data.success === false
-        ? String(fetcher.data.error)
-        : null,
-    pendingPayload,
-  };
+    {
+      pending: fetcher.state !== "idle",
+      data: fetcher.data,
+      pendingPayload,
+    },
+  ];
 }
 
 // ─── Module-level functions (read from singleton) ────────────────
 
-export function resolveFormData(formData: FormData): ActionObject {
+export function resolveFormData(formData: FormData): ActionObject<any> {
   return getFactory().resolveFormData(formData);
-}
-
-export function createAction<K extends RegisteredActionType>(
-  type: K,
-  payload: RegisteredPayload<K>,
-  options?: ActionOptions,
-): ActionObject {
-  return getFactory().createAction(type as string, payload, options);
 }

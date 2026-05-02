@@ -3,19 +3,13 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, act, waitFor, cleanup } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
-import { defineAction, buildActionModule } from "../define-action";
-import {
-  ActionsProvider,
-  useAction,
-  resolveFormData,
-  createAction,
-} from "../adapter";
+import { defineAction } from "../define-action";
+import { ActionsProvider, useAction, resolveFormData } from "../adapter";
 
 // ─── Fixtures ────────────────────────────────────────────────────
 
 const testAction = defineAction({
   type: "testAction",
-  method: "post",
   resolve: (payload: { name: string }) => ({
     greeting: `Hello ${payload.name}`,
   }),
@@ -25,7 +19,6 @@ const testAction = defineAction({
 
 const failAction = defineAction({
   type: "failAction",
-  method: "post",
   resolve: () => {
     throw new Error("Boom");
   },
@@ -33,52 +26,11 @@ const failAction = defineAction({
   errorMessage: "Something went wrong",
 });
 
-const module = buildActionModule({ testAction, failAction });
+const actions = [testAction, failAction];
 
 afterEach(() => {
   cleanup();
 });
-
-// ─── Test components ─────────────────────────────────────────────
-
-function TestHookConsumer() {
-  const { submit, isPending, data, error } = useAction<"testAction">(
-    "testAction" as never,
-  );
-
-  return (
-    <div>
-      <button
-        onClick={() => submit({ name: "World" } as never)}
-        data-testid="submit"
-      >
-        Submit
-      </button>
-      <span data-testid="pending">{String(isPending)}</span>
-      {data && <span data-testid="data">{JSON.stringify(data)}</span>}
-      {error && <span data-testid="error">{error}</span>}
-    </div>
-  );
-}
-
-function FailHookConsumer() {
-  const { submit, data, error } = useAction<"failAction">(
-    "failAction" as never,
-  );
-
-  return (
-    <div>
-      <button
-        onClick={() => submit({} as never)}
-        data-testid="fail-submit"
-      >
-        Fail
-      </button>
-      {data && <span data-testid="fail-data">{JSON.stringify(data)}</span>}
-      {error && <span data-testid="fail-error">{error}</span>}
-    </div>
-  );
-}
 
 // ─── Route action handler (user-written recipe) ─────────────────
 
@@ -87,10 +39,52 @@ async function routeAction({ request }: { request: Request }) {
   const actionObj = resolveFormData(formData);
   try {
     const response = await actionObj.resolve(undefined);
-    return { type: actionObj.type, success: true, response };
+    return { type: actionObj.type, success: true as const, response };
   } catch (err) {
-    return { type: actionObj.type, success: false, error: String(err) };
+    return { type: actionObj.type, success: false as const, error: String(err) };
   }
+}
+
+// ─── Test components ─────────────────────────────────────────────
+
+function TestHookConsumer({
+  onSuccess,
+  onError,
+}: {
+  onSuccess?: (result: { greeting: string }) => void;
+  onError?: (error: unknown) => void;
+}) {
+  const [submit, { pending, data }] = useAction(testAction, {
+    onSuccess,
+    onError,
+  });
+
+  return (
+    <div>
+      <button onClick={() => submit({ name: "World" })} data-testid="submit">
+        Submit
+      </button>
+      <span data-testid="pending">{String(pending)}</span>
+      {data && <span data-testid="data">{JSON.stringify(data)}</span>}
+    </div>
+  );
+}
+
+function FailHookConsumer({
+  onError,
+}: {
+  onError?: (error: unknown) => void;
+}) {
+  const [submit, { data }] = useAction(failAction, { onError });
+
+  return (
+    <div>
+      <button onClick={() => submit(undefined as never)} data-testid="fail-submit">
+        Fail
+      </button>
+      {data && <span data-testid="fail-data">{JSON.stringify(data)}</span>}
+    </div>
+  );
 }
 
 // ─── Unit tests ──────────────────────────────────────────────────
@@ -101,7 +95,7 @@ describe("ActionsProvider", () => {
       {
         path: "/",
         Component: () => (
-          <ActionsProvider actions={module}>
+          <ActionsProvider actions={actions}>
             <span data-testid="child">hello</span>
           </ActionsProvider>
         ),
@@ -118,7 +112,7 @@ describe("useAction — outside provider", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     function Bare() {
-      useAction<"testAction">("testAction" as never);
+      useAction(testAction);
       return null;
     }
 
@@ -142,23 +136,46 @@ describe("singleton — before mount", () => {
       "ActionsProvider has not been mounted",
     );
   });
-
-  it("createAction throws when singleton is not set", () => {
-    expect(() =>
-      createAction("testAction" as never, { name: "x" } as never),
-    ).toThrow("ActionsProvider has not been mounted");
-  });
 });
 
 // ─── Integration tests ──────────────────────────────────────────
 
 describe("useAction — integration", () => {
+  it("returns a tuple of [submit, state]", () => {
+    let tupleResult: unknown;
+
+    function Inspector() {
+      const result = useAction(testAction);
+      tupleResult = result;
+      return null;
+    }
+
+    const router = createMemoryRouter([
+      {
+        path: "/",
+        Component: () => (
+          <ActionsProvider actions={actions}>
+            <Inspector />
+          </ActionsProvider>
+        ),
+      },
+    ]);
+
+    render(<RouterProvider router={router} />);
+    expect(Array.isArray(tupleResult)).toBe(true);
+    const [submit, state] = tupleResult as [unknown, unknown];
+    expect(typeof submit).toBe("function");
+    expect(state).toHaveProperty("pending");
+    expect(state).toHaveProperty("data");
+    expect(state).toHaveProperty("pendingPayload");
+  });
+
   it("submit → action → response round-trip", async () => {
     const router = createMemoryRouter([
       {
         path: "/",
         Component: () => (
-          <ActionsProvider actions={module}>
+          <ActionsProvider actions={actions}>
             <TestHookConsumer />
           </ActionsProvider>
         ),
@@ -186,7 +203,7 @@ describe("useAction — integration", () => {
       {
         path: "/",
         Component: () => (
-          <ActionsProvider actions={module}>
+          <ActionsProvider actions={actions}>
             <FailHookConsumer />
           </ActionsProvider>
         ),
@@ -205,6 +222,60 @@ describe("useAction — integration", () => {
       const data = JSON.parse(dataEl.textContent!);
       expect(data.success).toBe(false);
       expect(data.type).toBe("failAction");
+    });
+  });
+
+  it("onSuccess fires with unwrapped result", async () => {
+    const onSuccess = vi.fn();
+
+    const router = createMemoryRouter([
+      {
+        path: "/",
+        Component: () => (
+          <ActionsProvider actions={actions}>
+            <TestHookConsumer onSuccess={onSuccess} />
+          </ActionsProvider>
+        ),
+        action: routeAction,
+      },
+    ]);
+
+    render(<RouterProvider router={router} />);
+
+    await act(async () => {
+      screen.getByTestId("submit").click();
+    });
+
+    await waitFor(() => {
+      expect(onSuccess).toHaveBeenCalledWith({ greeting: "Hello World" });
+      expect(onSuccess).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("onError fires with error on failure", async () => {
+    const onError = vi.fn();
+
+    const router = createMemoryRouter([
+      {
+        path: "/",
+        Component: () => (
+          <ActionsProvider actions={actions}>
+            <FailHookConsumer onError={onError} />
+          </ActionsProvider>
+        ),
+        action: routeAction,
+      },
+    ]);
+
+    render(<RouterProvider router={router} />);
+
+    await act(async () => {
+      screen.getByTestId("fail-submit").click();
+    });
+
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith(expect.stringContaining("Boom"));
     });
   });
 });
