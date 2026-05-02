@@ -42,9 +42,14 @@
     "react-router": ">=7.0.0"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.15.18",
     "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.2.3",
+    "happy-dom": "^20.9.0",
+    "jsdom": "^29.1.1",
     "react": "^19.0.0",
+    "react-dom": "^19.2.5",
     "react-router": "^7.6.1",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
