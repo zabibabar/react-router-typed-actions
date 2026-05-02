@@ -109,7 +109,7 @@ Delete the class-based v1 modules and update the barrel export to the new API su
 ### 7. Documentation — README, handler recipe (HITL)
 Rewrite the README for v2, document the handler recipe, and server action compatibility.
 
-**Status:** pending
+**Status:** committed
 **Blocked by:** 1, 2, 3, 4, 5, 6
 
 **Done when:**
