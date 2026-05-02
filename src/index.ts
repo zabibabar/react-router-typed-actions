@@ -1,37 +1,21 @@
 // ─── Core ────────────────────────────────────────────────────────
 
-export { defineAction, buildActionModule } from "./define-action";
+export { defineAction } from "./define-action";
 export type {
+  ActionCreator,
   ActionDefinition,
-  ActionDefinitionRecord,
   ActionMethod,
   MessageFactory,
-  SchemaLike,
-  InferPayloadMap,
-  InferActionMap,
-  InferActions,
-  ActionRegistry,
 } from "./define-action";
 
-// ─── Serialization (internal, but types are useful) ──────────────
+// ─── Message Overrides ───────────────────────────────────────────
 
-export type { FileEntry, SerializeResult } from "./serialization";
+export { withMessageOverrides } from "./with-message-overrides";
 
-// ─── Factory ─────────────────────────────────────────────────────
+// ─── Factory types ───────────────────────────────────────────────
 
-export { createActionsFactory } from "./factory";
-export type { ActionOptions, ActionObject } from "./factory";
+export type { ActionObject, ActionResult } from "./action-object";
 
 // ─── React Router Adapter ────────────────────────────────────────
 
-export {
-  ActionsProvider,
-  useAction,
-  resolveFormData,
-  createAction,
-} from "./adapter";
-export type {
-  ActionsProviderProps,
-  UseActionReturn,
-  ActionResult,
-} from "./adapter";
+export { ActionsProvider, useAction, resolveFormData } from "./adapter";

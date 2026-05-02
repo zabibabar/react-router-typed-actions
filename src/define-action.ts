@@ -89,9 +89,3 @@ export function defineAction<
   return creator;
 }
 
-// ─── Backward-compat (consumed by factory until Task 3) ──────────
-
-export type ActionDefinitionRecord<TContext = void> = Record<
-  string,
-  ActionDefinition<string, any, any, TContext>
->;
