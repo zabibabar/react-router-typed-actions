@@ -1,47 +1,68 @@
-import { getDefinitionFor, type ActionCreator, type ActionDefinition } from "./define-action";
+import { getDefinitionFor, type Action, type ActionDefinition } from "./define-action";
 
-const _globalRegistry = new Map<string, ActionDefinition>();
+interface RegistryEntry {
+  definition: ActionDefinition;
+  sliceName: string;
+}
 
-export function registerActions(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  creators: ActionCreator<string, any, any, any, any>[],
-): string[] {
-  const contributedTypes: string[] = [];
+const _globalRegistry = new Map<string, RegistryEntry>();
+
+export function registerSlice(
+  sliceName: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- existential erasure: heterogeneous array of differently-typed actions
+  creators: Action<string, any, any, any, any>[],
+): void {
+  // 1. Validate all creators before mutating the registry
+  const pending: { type: string; definition: ActionDefinition }[] = [];
 
   for (const creator of creators) {
     const def = getDefinitionFor(creator);
     if (!def) {
       throw new Error(
-        `react-router-actions: ActionCreator "${creator.type}" is missing its definition. ` +
+        `react-router-actions: Action "${creator.type}" is missing its definition. ` +
           "Only creators produced by defineAction() can be registered.",
       );
     }
-    if (_globalRegistry.has(creator.type)) {
+
+    // Duplicate type within the same array
+    if (pending.some((p) => p.type === creator.type)) {
       throw new Error(
-        `react-router-actions: Duplicate action type "${creator.type}" — ` +
-          `already registered by another ActionsProvider.`,
+        `react-router-actions: Duplicate action type "${creator.type}" within slice "${sliceName}".`,
       );
     }
-    _globalRegistry.set(creator.type, def);
-    contributedTypes.push(creator.type);
+
+    // Duplicate type across a different slice
+    const existing = _globalRegistry.get(creator.type);
+    if (existing && existing.sliceName !== sliceName) {
+      throw new Error(
+        `react-router-actions: Action type "${creator.type}" is already registered ` +
+          `by slice "${existing.sliceName}". Each action type must be unique across slices.`,
+      );
+    }
+
+    pending.push({ type: creator.type, definition: def });
   }
 
-  return contributedTypes;
-}
+  // 2. Clear all entries belonging to this slice (HMR-safe overwrite)
+  for (const [type, entry] of _globalRegistry) {
+    if (entry.sliceName === sliceName) {
+      _globalRegistry.delete(type);
+    }
+  }
 
-export function unregisterActions(types: string[]): void {
-  for (const type of types) {
-    _globalRegistry.delete(type);
+  // 3. Register the new entries
+  for (const { type, definition } of pending) {
+    _globalRegistry.set(type, { definition, sliceName });
   }
 }
 
 export function getDefinition(type: string): ActionDefinition {
-  const def = _globalRegistry.get(type);
-  if (!def) {
+  const entry = _globalRegistry.get(type);
+  if (!entry) {
     throw new Error(
       `react-router-actions: Unknown action type "${type}". ` +
-        "Ensure an ActionsProvider registering this action is mounted.",
+        "Ensure a registerSlice() call including this action has executed.",
     );
   }
-  return def;
+  return entry.definition;
 }

@@ -3,15 +3,15 @@ import { isMetaOverride } from "./with-meta-overrides";
 
 // ─── ActionObject ─────────────────────────────────────────────────
 
-export interface ActionObject<TContext = void, TMeta = void> {
+export interface ActionObject<TResult = unknown, TContext = void, TMeta = void> {
   readonly type: string;
   readonly name: string;
   readonly method: ActionMethod;
   readonly payload: unknown;
   readonly meta: TMeta;
   resolve: [TContext] extends [void]
-    ? () => Promise<unknown>
-    : (context: TContext) => Promise<unknown>;
+    ? () => Promise<TResult>
+    : (context: TContext) => Promise<TResult>;
 }
 
 // ─── ActionResult ─────────────────────────────────────────────────
@@ -36,11 +36,12 @@ export function actionFailure(
 
 // ─── buildActionObject ───────────────────────────────────────────
 
-export function buildActionObject<TContext = void, TMeta = void>(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  def: ActionDefinition<string, any, any, TContext, TMeta>,
+export function buildActionObject<TResult = unknown, TContext = void, TMeta = void>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- contravariant bypass: TPayload erased because payload is received as unknown
+  def: ActionDefinition<string, any, TResult, TContext, TMeta>,
   payload: unknown,
-): ActionObject<TContext, TMeta> {
+  submitMeta?: Partial<TMeta>,
+): ActionObject<TResult, TContext, TMeta> {
   let dynamicOverrides: Partial<TMeta> | undefined;
 
   const obj = {
@@ -71,12 +72,12 @@ export function buildActionObject<TContext = void, TMeta = void>(
      * `withMetaOverrides`.
      */
     get meta(): TMeta {
-      if (dynamicOverrides !== undefined) {
-        return { ...def.meta, ...dynamicOverrides } as TMeta;
+      if (submitMeta !== undefined || dynamicOverrides !== undefined) {
+        return { ...def.meta, ...submitMeta, ...dynamicOverrides } as TMeta;
       }
       return def.meta;
     },
   };
 
-  return obj as unknown as ActionObject<TContext, TMeta>;
+  return obj as unknown as ActionObject<TResult, TContext, TMeta>;
 }

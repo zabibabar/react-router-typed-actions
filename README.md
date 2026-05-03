@@ -359,16 +359,16 @@ Payloads are serialized with [SuperJSON](https://github.com/blitz-js/superjson) 
 | `actionSuccess(action, response)` | Create a success `ActionResult` envelope |
 | `actionFailure(action, error)` | Create a failure `ActionResult` envelope |
 | `resolveFormData(formData)` | Deserialize `FormData` into an `ActionObject` |
-| `createFormData(type, payload)` | Serialize an action type + payload into `FormData` |
-| `getDefinitionFor(creator)` | Retrieve the `ActionDefinition` for an `ActionCreator` |
+| `createFormData(creator, payload)` | Serialize an action creator + payload into `FormData` |
+| `getDefinitionFor(creator)` | Retrieve the `ActionDefinition` for an `Action` |
 | `ActionsProvider` | React component — registers actions and provides context |
-| `useAction(actionCreator, options?)` | Typed hook wrapping `useFetcher` — returns `[submit, state]` tuple |
+| `useAction(action, options?)` | Typed hook wrapping `useFetcher` — returns `[submit, state]` tuple |
 
 ### Types
 
 | Export | Description |
 | --- | --- |
-| `ActionCreator<TType, TPayload, TResult, TContext, TMeta>` | Callable action creator with identity properties |
+| `Action<TType, TPayload, TResult, TContext, TMeta>` | Callable action with identity properties |
 | `ActionDefinition<TType, TPayload, TResult, TContext, TMeta>` | Shape of an action definition (post-defaults) |
 | `ActionObject<TContext, TMeta>` | Runtime action instance with `resolve`, `payload`, `meta` |
 | `ActionResult<TResult>` | Discriminated union: `{ success: true, response } \| { success: false, error }` |

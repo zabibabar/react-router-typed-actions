@@ -2,10 +2,14 @@
 
 export { defineAction, getDefinitionFor } from "./define-action";
 export type {
-  ActionCreator,
+  Action,
   ActionDefinition,
   ActionMethod,
 } from "./define-action";
+
+// ─── Registry ───────────────────────────────────────────────────
+
+export { registerSlice } from "./registry";
 
 // ─── Meta Overrides ──────────────────────────────────────────────
 
@@ -23,10 +27,8 @@ export { createFormData, resolveFormData } from "./form-data";
 
 // ─── React Router Adapter ────────────────────────────────────────
 
-export { ActionsProvider, useAction } from "./adapter";
+export { useAction } from "./adapter";
 export type {
-  ActionEvent,
-  ActionEventHandler,
   UseActionOptions,
   UseActionState,
 } from "./adapter";

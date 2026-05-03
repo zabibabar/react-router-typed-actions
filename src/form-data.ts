@@ -4,24 +4,29 @@ import { serialize, deserialize, type FileEntry } from "./serialization";
 import { getDefinition } from "./registry";
 
 export function createFormData(
-  type: string,
+  creator: { readonly type: string; readonly method: ActionMethod },
   payload: unknown,
+  metaOverrides?: Record<string, unknown>,
 ): { formData: FormData; method: ActionMethod } {
-  const def = getDefinition(type);
   const { encoded, files } = serialize(payload);
 
   const formData = new FormData();
-  formData.set("actionType", type);
+  formData.set("actionType", creator.type);
   formData.set("payload", encoded);
   for (const { path, file } of files) {
     formData.set(`file:${path}`, file);
   }
 
-  return { formData, method: def.method };
+  if (metaOverrides) {
+    const { encoded: metaEncoded } = serialize(metaOverrides);
+    formData.set("metaOverrides", metaEncoded);
+  }
+
+  return { formData, method: creator.method };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function resolveFormData(formData: FormData): ActionObject<any, any> {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- TContext=any for bivariant resolve(); TMeta=any because definition type is unknown at deserialization
+export function resolveFormData(formData: FormData): ActionObject<unknown, any, any> {
   const actionType = formData.get("actionType");
   const encodedPayload = formData.get("payload");
 
@@ -36,7 +41,12 @@ export function resolveFormData(formData: FormData): ActionObject<any, any> {
 
   const def = getDefinition(actionType);
   const payload = deserializePayload(formData);
-  return buildActionObject(def, payload);
+
+  const rawMeta = formData.get("metaOverrides");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- type is erased at deserialization boundary
+  const submitMeta = typeof rawMeta === "string" ? (deserialize(rawMeta, []) as any) : undefined;
+
+  return buildActionObject(def, payload, submitMeta);
 }
 
 export function deserializePayload(formData: FormData): unknown {

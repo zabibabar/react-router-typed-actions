@@ -1,5 +1,5 @@
 import { describe, it, expect, expectTypeOf } from "vitest";
-import { defineAction, getDefinitionFor, type ActionCreator } from "../define-action";
+import { defineAction, getDefinitionFor, type Action } from "../define-action";
 import type { ActionObject } from "../action-object";
 
 // ─── Fixtures ────────────────────────────────────────────────────
@@ -46,10 +46,10 @@ const minimalAction = defineAction({
   resolve: (payload: { x: number }) => payload.x * 2,
 });
 
-// ─── defineAction returns ActionCreator ──────────────────────────
+// ─── defineAction returns Action ─────────────────────────────────
 
 describe("defineAction", () => {
-  it("returns an ActionCreator with identity properties", () => {
+  it("returns an Action with identity properties", () => {
     expect(createItem.type).toBe("createItem");
     expect(createItem.method).toBe("POST");
     expect(createItem.name).toBe("createItem");
@@ -77,9 +77,9 @@ describe("defineAction", () => {
   });
 });
 
-// ─── ActionCreator is callable ───────────────────────────────────
+// ─── Action is callable ─────────────────────────────────────────
 
-describe("ActionCreator callable", () => {
+describe("Action callable", () => {
   it("produces an ActionObject with correct shape", () => {
     const action = createItem({ title: "Widget" });
     expect(action.type).toBe("createItem");
@@ -115,7 +115,7 @@ describe("ActionCreator callable", () => {
   });
 
   it("getDefinitionFor returns undefined for a plain function", () => {
-    const plainFn = (() => {}) as unknown as ActionCreator;
+    const plainFn = (() => {}) as unknown as Action;
     expect(getDefinitionFor(plainFn)).toBeUndefined();
   });
 });
@@ -128,36 +128,36 @@ describe("type inference", () => {
     expectTypeOf(deleteItem.type).toEqualTypeOf<"deleteItem">();
   });
 
-  it("ActionCreator is assignable to its type", () => {
+  it("Action is assignable to its type", () => {
     expectTypeOf(createItem).toMatchTypeOf<
-      ActionCreator<"createItem", { title: string }, { id: string; title: string }, void, ItemMeta>
+      Action<"createItem", { title: string }, { id: string; title: string }, void, ItemMeta>
     >();
   });
 
-  it("calling the creator returns ActionObject<void, ItemMeta> for typed meta", () => {
+  it("calling the creator returns ActionObject with TResult, TContext, TMeta for typed meta", () => {
     const action = createItem({ title: "x" });
-    expectTypeOf(action).toMatchTypeOf<ActionObject<void, ItemMeta>>();
+    expectTypeOf(action).toMatchTypeOf<ActionObject<{ id: string; title: string }, void, ItemMeta>>();
   });
 
-  it("calling the creator returns ActionObject<TContext, void> for typed context", () => {
+  it("calling the creator returns ActionObject with TResult, TContext, TMeta for typed context", () => {
     const action = contextAction({ name: "x" });
-    expectTypeOf(action).toMatchTypeOf<ActionObject<{ token: string }, void>>();
+    expectTypeOf(action).toMatchTypeOf<ActionObject<{ name: string; token: string }, { token: string }, void>>();
   });
 
-  it("resolve on void-context ActionObject takes no args", () => {
+  it("resolve on void-context ActionObject takes no args and returns typed result", () => {
     const action = createItem({ title: "x" });
-    expectTypeOf(action.resolve).toEqualTypeOf<() => Promise<unknown>>();
+    expectTypeOf(action.resolve).toEqualTypeOf<() => Promise<{ id: string; title: string }>>();
   });
 
-  it("resolve on typed-context ActionObject requires context", () => {
+  it("resolve on typed-context ActionObject requires context and returns typed result", () => {
     const action = contextAction({ name: "x" });
     expectTypeOf(action.resolve).toEqualTypeOf<
-      (context: { token: string }) => Promise<unknown>
+      (context: { token: string }) => Promise<{ name: string; token: string }>
     >();
   });
 
   it("TMeta defaults to void when meta config is omitted", () => {
     const action = minimalAction({ x: 1 });
-    expectTypeOf(action).toMatchTypeOf<ActionObject<void, void>>();
+    expectTypeOf(action).toMatchTypeOf<ActionObject<number, void, void>>();
   });
 });

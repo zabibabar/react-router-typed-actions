@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { defineAction } from "../define-action";
 import { createFormData, resolveFormData } from "../form-data";
-import { registerActions, unregisterActions } from "../registry";
+import { registerSlice } from "../registry";
 import { withMetaOverrides } from "../with-meta-overrides";
 import { actionSuccess, actionFailure } from "../action-object";
 
@@ -83,33 +83,46 @@ const dynamicErrorAction = defineAction<
   },
 });
 
+const throwingMetaAction = defineAction<
+  "throwingMeta",
+  { name: string },
+  never,
+  void,
+  ToastMeta
+>({
+  type: "throwingMeta",
+  resolve: (payload) => {
+    throw withMetaOverrides(new Error(`${payload.name} exploded`), {
+      errorMessage: `${payload.name} failed dynamically`,
+    });
+  },
+  meta: {
+    successMessage: "Default success",
+    errorMessage: "Default error",
+  },
+});
+
 const noMetaAction = defineAction({
   type: "noMetaAction",
   resolve: (payload: { x: number }) => payload.x * 2,
 });
 
-const allActions = [
-  createItem,
-  deleteItem,
-  dynamicAction,
-  dynamicErrorAction,
-  noMetaAction,
-];
-let contributedTypes: string[];
-
 beforeEach(() => {
-  contributedTypes = registerActions(allActions);
-});
-
-afterEach(() => {
-  unregisterActions(contributedTypes);
+  registerSlice("factory-test", [
+    createItem,
+    deleteItem,
+    dynamicAction,
+    dynamicErrorAction,
+    throwingMetaAction,
+    noMetaAction,
+  ]);
 });
 
 // ─── createFormData / resolveFormData round-trip ─────────────────
 
 describe("createFormData / resolveFormData round-trip", () => {
   it("round-trips a simple payload", () => {
-    const { formData, method } = createFormData("createItem", {
+    const { formData, method } = createFormData(createItem, {
       title: "Widget",
     });
     expect(method).toBe("POST");
@@ -127,14 +140,12 @@ describe("createFormData / resolveFormData round-trip", () => {
       type: "dateAction",
       resolve: (p: { ts: Date }) => p,
     });
-    const types = registerActions([dateAction]);
+    registerSlice("factory-test-date", [dateAction]);
 
     const date = new Date("2025-06-15T12:00:00Z");
-    const { formData } = createFormData("dateAction", { ts: date });
+    const { formData } = createFormData(dateAction, { ts: date });
     const action = resolveFormData(formData);
     expect(action.payload).toEqual({ ts: date });
-
-    unregisterActions(types);
   });
 
   it("round-trips a File in payload", () => {
@@ -142,17 +153,26 @@ describe("createFormData / resolveFormData round-trip", () => {
       type: "fileAction",
       resolve: (p: { doc: File }) => ({ ok: true }),
     });
-    const types = registerActions([fileAction]);
+    registerSlice("factory-test-file", [fileAction]);
 
     const file = new File(["content"], "test.txt", { type: "text/plain" });
-    const { formData } = createFormData("fileAction", { doc: file });
+    const { formData } = createFormData(fileAction, { doc: file });
 
     expect(formData.get("file:doc")).toBeInstanceOf(Blob);
 
     const action = resolveFormData(formData);
     expect((action.payload as { doc: File }).doc).toBeInstanceOf(Blob);
+  });
 
-    unregisterActions(types);
+  it("works without registration (decoupled from registry)", () => {
+    const standaloneAction = defineAction({
+      type: "standaloneAction",
+      resolve: (p: { value: number }) => p.value,
+    });
+
+    const { formData, method } = createFormData(standaloneAction, { value: 42 });
+    expect(method).toBe("POST");
+    expect(formData.get("actionType")).toBe("standaloneAction");
   });
 });
 
@@ -160,7 +180,7 @@ describe("createFormData / resolveFormData round-trip", () => {
 
 describe("ActionObject from resolveFormData", () => {
   it("has correct shape", () => {
-    const { formData } = createFormData("createItem", {
+    const { formData } = createFormData(createItem, {
       title: "Hello",
     });
     const action = resolveFormData(formData);
@@ -172,7 +192,7 @@ describe("ActionObject from resolveFormData", () => {
   });
 
   it("resolve returns the expected result", async () => {
-    const { formData } = createFormData("createItem", {
+    const { formData } = createFormData(createItem, {
       title: "Test",
     });
     const action = resolveFormData(formData);
@@ -181,7 +201,7 @@ describe("ActionObject from resolveFormData", () => {
   });
 
   it("meta returns static meta from definition", () => {
-    const { formData } = createFormData("createItem", {
+    const { formData } = createFormData(createItem, {
       title: "Widget",
     });
     const action = resolveFormData(formData);
@@ -192,7 +212,7 @@ describe("ActionObject from resolveFormData", () => {
   });
 
   it("meta is undefined when definition omits it", () => {
-    const { formData } = createFormData("noMetaAction", { x: 5 });
+    const { formData } = createFormData(noMetaAction, { x: 5 });
     const action = resolveFormData(formData);
     expect(action.meta).toBeUndefined();
   });
@@ -201,12 +221,6 @@ describe("ActionObject from resolveFormData", () => {
 // ─── Invalid / missing input ─────────────────────────────────────
 
 describe("invalid / missing input", () => {
-  it("throws for unknown action type in createFormData", () => {
-    expect(() => createFormData("nonExistent", {})).toThrow(
-      'Unknown action type "nonExistent"',
-    );
-  });
-
   it("throws for missing actionType in FormData", () => {
     const formData = new FormData();
     formData.set("payload", '{"json":"{}"}');
@@ -225,10 +239,10 @@ describe("invalid / missing input", () => {
 
   it("throws for unknown actionType in FormData", () => {
     const formData = new FormData();
-    formData.set("actionType", "unknown");
+    formData.set("actionType", "NEVER_DEFINED");
     formData.set("payload", '{"json":"{}"}');
     expect(() => resolveFormData(formData)).toThrow(
-      'Unknown action type "unknown"',
+      'Unknown action type "NEVER_DEFINED"',
     );
   });
 });
@@ -237,7 +251,7 @@ describe("invalid / missing input", () => {
 
 describe("withMetaOverrides through resolve", () => {
   it("returns static meta before resolve is called", () => {
-    const { formData } = createFormData("dynamicAction", {
+    const { formData } = createFormData(dynamicAction, {
       name: "Test",
     });
     const action = resolveFormData(formData);
@@ -248,7 +262,7 @@ describe("withMetaOverrides through resolve", () => {
   });
 
   it("merges dynamic overrides into meta after resolve", async () => {
-    const { formData } = createFormData("dynamicAction", {
+    const { formData } = createFormData(dynamicAction, {
       name: "TestItem",
     });
     const action = resolveFormData(formData);
@@ -260,7 +274,7 @@ describe("withMetaOverrides through resolve", () => {
   });
 
   it("merges dynamic error overrides into meta after resolve", async () => {
-    const { formData } = createFormData("dynamicErrorAction", {
+    const { formData } = createFormData(dynamicErrorAction, {
       name: "BadItem",
     });
     const action = resolveFormData(formData);
@@ -272,7 +286,7 @@ describe("withMetaOverrides through resolve", () => {
   });
 
   it("unwraps data from MetaOverrideResult", async () => {
-    const { formData } = createFormData("dynamicAction", {
+    const { formData } = createFormData(dynamicAction, {
       name: "Test",
     });
     const action = resolveFormData(formData);
@@ -281,7 +295,7 @@ describe("withMetaOverrides through resolve", () => {
   });
 
   it("keeps static meta when resolve returns raw data", async () => {
-    const { formData } = createFormData("createItem", {
+    const { formData } = createFormData(createItem, {
       title: "Widget",
     });
     const action = resolveFormData(formData);
@@ -297,7 +311,7 @@ describe("withMetaOverrides through resolve", () => {
 
 describe("actionSuccess / actionFailure", () => {
   it("actionSuccess creates a success result", () => {
-    const { formData } = createFormData("createItem", { title: "Test" });
+    const { formData } = createFormData(createItem, { title: "Test" });
     const action = resolveFormData(formData);
     const result = actionSuccess(action, { id: "1", title: "Test" });
     expect(result).toEqual({
@@ -308,7 +322,7 @@ describe("actionSuccess / actionFailure", () => {
   });
 
   it("actionFailure creates a failure result", () => {
-    const { formData } = createFormData("createItem", { title: "Test" });
+    const { formData } = createFormData(createItem, { title: "Test" });
     const action = resolveFormData(formData);
     const result = actionFailure(action, "Something went wrong");
     expect(result).toEqual({
@@ -316,5 +330,152 @@ describe("actionSuccess / actionFailure", () => {
       success: false,
       error: "Something went wrong",
     });
+  });
+});
+
+// ─── Error-path meta overrides (thrown MetaOverrideResult) ──────
+
+describe("thrown MetaOverrideResult in resolve", () => {
+  it("unwraps the error from the MetaOverrideResult wrapper", async () => {
+    const { formData } = createFormData(throwingMetaAction, { name: "Widget" });
+    const action = resolveFormData(formData);
+
+    await expect(action.resolve()).rejects.toThrow("Widget exploded");
+  });
+
+  it("merges dynamic overrides into meta after thrown MetaOverrideResult", async () => {
+    const { formData } = createFormData(throwingMetaAction, { name: "Widget" });
+    const action = resolveFormData(formData);
+
+    try {
+      await action.resolve();
+    } catch {
+      // expected
+    }
+
+    expect(action.meta).toEqual({
+      successMessage: "Default success",
+      errorMessage: "Widget failed dynamically",
+    });
+  });
+
+  it("retains static meta for unoverridden keys after thrown MetaOverrideResult", async () => {
+    const { formData } = createFormData(throwingMetaAction, { name: "Gadget" });
+    const action = resolveFormData(formData);
+
+    try {
+      await action.resolve();
+    } catch {
+      // expected
+    }
+
+    expect(action.meta.successMessage).toBe("Default success");
+    expect(action.meta.errorMessage).toBe("Gadget failed dynamically");
+  });
+});
+
+// ─── createFormData method passthrough ──────────────────────────
+
+describe("createFormData method passthrough", () => {
+  it("returns DELETE method for a DELETE action", () => {
+    const { method } = createFormData(deleteItem, { id: "1" });
+    expect(method).toBe("DELETE");
+  });
+
+  it("returns POST method for a default action", () => {
+    const { method } = createFormData(createItem, { title: "Test" });
+    expect(method).toBe("POST");
+  });
+});
+
+// ─── registerSlice ──────────────────────────────────────────────
+
+describe("registerSlice", () => {
+  it("throws on duplicate action type within the same slice", () => {
+    const actionA = defineAction({
+      type: "duplicateWithinSlice",
+      resolve: () => "a",
+    });
+    const actionB = defineAction({
+      type: "duplicateWithinSlice",
+      resolve: () => "b",
+    });
+
+    expect(() => registerSlice("dup-test", [actionA, actionB])).toThrow(
+      'Duplicate action type "duplicateWithinSlice" within slice "dup-test"',
+    );
+  });
+
+  it("throws on duplicate action type across different slices", () => {
+    const actionA = defineAction({
+      type: "crossSliceDup",
+      resolve: () => "a",
+    });
+    const actionB = defineAction({
+      type: "crossSliceDup",
+      resolve: () => "b",
+    });
+
+    registerSlice("slice-a", [actionA]);
+    expect(() => registerSlice("slice-b", [actionB])).toThrow(
+      'Action type "crossSliceDup" is already registered by slice "slice-a"',
+    );
+  });
+
+  it("allows re-registering the same slice name (HMR)", () => {
+    const action = defineAction({
+      type: "hmrAction",
+      resolve: () => "v1",
+    });
+
+    registerSlice("hmr-slice", [action]);
+
+    const actionV2 = defineAction({
+      type: "hmrAction",
+      resolve: () => "v2",
+    });
+
+    expect(() => registerSlice("hmr-slice", [actionV2])).not.toThrow();
+  });
+
+  it("clears old entries when re-registering a slice", () => {
+    const actionA = defineAction({
+      type: "sliceClearA",
+      resolve: () => "a",
+    });
+    const actionB = defineAction({
+      type: "sliceClearB",
+      resolve: () => "b",
+    });
+
+    registerSlice("clear-test", [actionA, actionB]);
+
+    const actionC = defineAction({
+      type: "sliceClearC",
+      resolve: () => "c",
+    });
+
+    registerSlice("clear-test", [actionC]);
+
+    const formDataA = new FormData();
+    formDataA.set("actionType", "sliceClearA");
+    formDataA.set("payload", '{"json":"{}"}');
+    expect(() => resolveFormData(formDataA)).toThrow(
+      'Unknown action type "sliceClearA"',
+    );
+
+    const formDataC = new FormData();
+    formDataC.set("actionType", "sliceClearC");
+    formDataC.set("payload", '{"json":"{}"}');
+    expect(() => resolveFormData(formDataC)).not.toThrow();
+  });
+
+  it("throws when registering a non-defineAction creator", () => {
+    const fake = (() => {}) as any;
+    fake.type = "fakeAction";
+
+    expect(() => registerSlice("fake-test", [fake])).toThrow(
+      'missing its definition',
+    );
   });
 });

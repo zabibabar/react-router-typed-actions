@@ -28,16 +28,16 @@ export interface ActionDefinition<
   readonly meta: TMeta;
 }
 
-// ─── ActionCreator ────────────────────────────────────────────────
+// ─── Action ──────────────────────────────────────────────────────
 
-export type ActionCreator<
+export type Action<
   TType extends string = string,
   TPayload = unknown,
   TResult = unknown,
   TContext = void,
   TMeta = void,
 > = {
-  (payload: TPayload): ActionObject<TContext, TMeta>;
+  (payload: TPayload): ActionObject<TResult, TContext, TMeta>;
   readonly type: TType;
   readonly name: string;
   readonly method: ActionMethod;
@@ -45,12 +45,12 @@ export type ActionCreator<
 
 // ─── Definition store (private) ───────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- existential erasure: heterogeneous map of differently-typed definitions
 const definitionStore = new WeakMap<Function, ActionDefinition<string, any, any, any, any>>();
 
 export function getDefinitionFor(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  creator: ActionCreator<string, any, any, any, any>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- existential erasure: accepts any Action regardless of generic params
+  creator: Action<string, any, any, any, any>,
 ): ActionDefinition | undefined {
   return definitionStore.get(creator);
 }
@@ -81,19 +81,18 @@ export function defineAction<
   TMeta = void,
 >(
   config: DefineActionConfig<TType, TPayload, TResult, TContext, TMeta>,
-): ActionCreator<TType, TPayload, TResult, TContext, TMeta> {
+): Action<TType, TPayload, TResult, TContext, TMeta> {
   const definition: ActionDefinition<TType, TPayload, TResult, TContext, TMeta> = {
     type: config.type,
     name: config.name ?? config.type,
     method: config.method ?? "POST",
     resolve: config.resolve,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    meta: (config as any).meta as TMeta,
+    meta: (config as { meta?: TMeta }).meta as TMeta,
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- contravariant bypass: TPayload erased to any because buildActionObject receives payload as unknown
   const creator = ((payload: TPayload) =>
-    buildActionObject(definition as ActionDefinition<string, any, any, TContext, TMeta>, payload)) as ActionCreator<
+    buildActionObject(definition as ActionDefinition<string, any, TResult, TContext, TMeta>, payload)) as Action<
     TType,
     TPayload,
     TResult,
