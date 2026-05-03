@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import { buildActionObject, type ActionObject } from "./action-object";
 import type { MetaOverrideResult } from "./with-meta-overrides";
 
@@ -47,9 +45,11 @@ export type ActionCreator<
 
 // ─── Definition store (private) ───────────────────────────────────
 
-const definitionStore = new WeakMap<Function, ActionDefinition>();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const definitionStore = new WeakMap<Function, ActionDefinition<string, any, any, any, any>>();
 
 export function getDefinitionFor(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   creator: ActionCreator<string, any, any, any, any>,
 ): ActionDefinition | undefined {
   return definitionStore.get(creator);
@@ -87,9 +87,11 @@ export function defineAction<
     name: config.name ?? config.type,
     method: config.method ?? "POST",
     resolve: config.resolve,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     meta: (config as any).meta as TMeta,
   };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const creator = ((payload: TPayload) =>
     buildActionObject(definition as ActionDefinition<string, any, any, TContext, TMeta>, payload)) as ActionCreator<
     TType,

@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import type { ActionDefinition, ActionMethod } from "./define-action";
 import { isMetaOverride } from "./with-meta-overrides";
 
@@ -39,6 +37,7 @@ export function actionFailure(
 // ─── buildActionObject ───────────────────────────────────────────
 
 export function buildActionObject<TContext = void, TMeta = void>(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   def: ActionDefinition<string, any, any, TContext, TMeta>,
   payload: unknown,
 ): ActionObject<TContext, TMeta> {
@@ -65,6 +64,12 @@ export function buildActionObject<TContext = void, TMeta = void>(
         throw error;
       }
     },
+    /**
+     * Returns the action's metadata. Before `resolve()` is called, returns
+     * the static meta from the definition. After `resolve()` completes,
+     * returns static meta merged with any dynamic overrides from
+     * `withMetaOverrides`.
+     */
     get meta(): TMeta {
       if (dynamicOverrides !== undefined) {
         return { ...def.meta, ...dynamicOverrides } as TMeta;

@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import type { ActionMethod } from "./define-action";
 import { buildActionObject, type ActionObject } from "./action-object";
 import { serialize, deserialize, type FileEntry } from "./serialization";
@@ -22,6 +20,7 @@ export function createFormData(
   return { formData, method: def.method };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function resolveFormData(formData: FormData): ActionObject<any, any> {
   const actionType = formData.get("actionType");
   const encodedPayload = formData.get("payload");

@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-
 import {
   createContext,
   useContext,
@@ -60,6 +58,7 @@ const ActionsContext = createContext<ActionsContextValue | null>(null);
 // ─── ActionsProvider ─────────────────────────────────────────────
 
 export interface ActionsProviderProps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   actions: ActionCreator<string, any, any, any, any>[];
   debug?: boolean;
   onAction?: ActionEventHandler;
