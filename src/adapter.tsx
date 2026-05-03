@@ -1,18 +1,12 @@
-import {
-  useEffect,
-  useMemo,
-  useRef,
-  useCallback,
-} from "react";
-import { useFetcher } from "react-router";
+import { useEffect, useMemo, useRef, useCallback } from "react";
+import { useFetcher, FetcherSubmitOptions } from "react-router";
 import type { Action } from "./define-action";
 import type { ActionResult } from "./action-object";
 import { createFormData, deserializePayload } from "./form-data";
 
 // ─── useAction hook ──────────────────────────────────────────────
-
 export interface UseActionOptions<TResult> {
-  action?: string;
+  fetcherOptions?: FetcherSubmitOptions;
   onSuccess?: (result: TResult) => void;
   onError?: (error: unknown) => void;
 }
@@ -32,17 +26,18 @@ export function useAction<
 >(
   action: Action<TType, TPayload, TResult, TContext, TMeta>,
   options?: UseActionOptions<TResult>,
-): [submit: (payload: TPayload, meta?: Partial<TMeta>) => void, state: UseActionState<TResult, TPayload>] {
+): [
+  submit: (payload: TPayload, meta?: Partial<TMeta>) => void,
+  state: UseActionState<TResult, TPayload>,
+] {
   const fetcher = useFetcher<ActionResult<TResult>>();
   const prevDataRef = useRef<ActionResult<TResult> | undefined>(undefined);
-  const submitTimestampRef = useRef<number>(0);
 
   const latestRef = useRef({ action, options });
   latestRef.current = { action, options };
 
   const submit = useCallback((payload: TPayload, meta?: Partial<TMeta>) => {
     const { action: act, options: opts } = latestRef.current;
-    submitTimestampRef.current = Date.now();
 
     const { formData, method } = createFormData(
       act,
@@ -50,10 +45,9 @@ export function useAction<
       meta as Record<string, unknown> | undefined,
     );
     fetcher.submit(formData, {
+      ...opts?.fetcherOptions,
       method,
-      ...(opts?.action ? { action: opts.action } : {}),
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {

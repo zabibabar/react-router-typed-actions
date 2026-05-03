@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { defineAction } from "../define-action";
 import { createFormData, resolveFormData } from "../form-data";
-import { registerSlice } from "../registry";
+import { registerSlice, _resetRegistryForTesting } from "../registry";
 import { withMetaOverrides } from "../with-meta-overrides";
 import { actionSuccess, actionFailure } from "../action-object";
 
@@ -116,6 +116,10 @@ beforeEach(() => {
     throwingMetaAction,
     noMetaAction,
   ]);
+});
+
+afterEach(() => {
+  _resetRegistryForTesting();
 });
 
 // ─── createFormData / resolveFormData round-trip ─────────────────

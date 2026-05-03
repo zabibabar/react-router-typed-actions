@@ -6,7 +6,7 @@ Type-safe mutations for React Router. Define actions as plain objects, serialize
 
 React Router's `useFetcher` takes untyped `FormData`. Every mutation means hand-rolling `formData.append`, parsing it back in the route `action`, and hoping the payload shape matches on both sides. Across 5, 10, 20+ mutations the pain compounds: inconsistent patterns, no compile-time safety, and tedious FormData plumbing on every route.
 
-`react-router-actions` eliminates this entire category of work. You define each mutation once, pass them to a provider, and the library handles serialization (including Date, File, Map, Set, BigInt), type inference, and the `useFetcher` wrapper — with `onSuccess`/`onError` callbacks that remove `useEffect` boilerplate.
+`react-router-actions` eliminates this entire category of work. You define each mutation once, register them with `registerSlice`, and the library handles serialization (including Date, File, Map, Set, BigInt), type inference, and the `useFetcher` wrapper — with `onSuccess`/`onError` callbacks that remove `useEffect` boilerplate.
 
 > **Positioning:** This library pays for itself in apps with **5+ mutation types across multiple routes**. For a single form on a single route, React Router's built-in `action` is simpler.
 
@@ -48,24 +48,21 @@ Group actions with plain arrays — no module augmentation, no registry interfac
 export const campaignActions = [createCampaign, deleteCampaign];
 ```
 
-### 2. Mount the Provider
+### 2. Register actions
 
-Spread domain arrays into a single flat list:
+Call `registerSlice` at module scope to register each domain's actions. Each slice name must be unique:
 
-```tsx
-// root.tsx
-import { ActionsProvider } from "react-router-actions";
+```typescript
+// app/actions.ts
+import { registerSlice } from "react-router-actions";
 import { campaignActions } from "~/domain/campaign/actions";
 import { creatorActions } from "~/domain/creator/actions";
 
-export default function Root() {
-  return (
-    <ActionsProvider actions={[...campaignActions, ...creatorActions]}>
-      <Outlet />
-    </ActionsProvider>
-  );
-}
+registerSlice("campaign", campaignActions);
+registerSlice("creator", creatorActions);
 ```
+
+Import this module from your root route (or any entry point) so registration runs before the first action is dispatched. Re-registering the same slice name replaces its entries, making this HMR-safe.
 
 ### 3. Write the route handler
 
@@ -145,7 +142,6 @@ Install to working mutation in under 2 minutes.
 | `type` | *required* | Unique string identifier |
 | `resolve` | *required* | `(payload, context?) => result` |
 | `method` | `"POST"` | HTTP method for `fetcher.submit` |
-| `name` | same as `type` | Display name for logging/devtools |
 | `meta` | `undefined` | Static metadata (typed via `TMeta` generic) |
 
 ## Meta and Dynamic Overrides
@@ -354,6 +350,7 @@ Payloads are serialized with [SuperJSON](https://github.com/blitz-js/superjson) 
 | Export | Description |
 | --- | --- |
 | `defineAction(config)` | Define a callable action creator from a config object |
+| `registerSlice(name, actions)` | Register a named group of actions (HMR-safe, idempotent per slice name) |
 | `withMetaOverrides(data, overrides)` | Wrap a resolve return value with dynamic meta overrides |
 | `isMetaOverride(value)` | Type guard — returns `true` if the value is a `MetaOverrideResult` |
 | `actionSuccess(action, response)` | Create a success `ActionResult` envelope |
@@ -361,7 +358,6 @@ Payloads are serialized with [SuperJSON](https://github.com/blitz-js/superjson) 
 | `resolveFormData(formData)` | Deserialize `FormData` into an `ActionObject` |
 | `createFormData(creator, payload)` | Serialize an action creator + payload into `FormData` |
 | `getDefinitionFor(creator)` | Retrieve the `ActionDefinition` for an `Action` |
-| `ActionsProvider` | React component — registers actions and provides context |
 | `useAction(action, options?)` | Typed hook wrapping `useFetcher` — returns `[submit, state]` tuple |
 
 ### Types
@@ -374,9 +370,7 @@ Payloads are serialized with [SuperJSON](https://github.com/blitz-js/superjson) 
 | `ActionResult<TResult>` | Discriminated union: `{ success: true, response } \| { success: false, error }` |
 | `ActionMethod` | `"GET" \| "POST" \| "PUT" \| "PATCH" \| "DELETE"` |
 | `MetaOverrideResult<T, TMeta>` | Tagged wrapper returned by `withMetaOverrides` |
-| `ActionEvent` | Discriminated union of submit/success/error lifecycle events |
-| `ActionEventHandler` | `(event: ActionEvent) => void` |
-| `UseActionOptions<TResult>` | Options for `useAction`: `action?`, `onSuccess?`, `onError?` |
+| `UseActionOptions<TResult>` | Options for `useAction`: `fetcherOptions?`, `onSuccess?`, `onError?` |
 | `UseActionState<TResult, TPayload>` | State object: `state`, `data`, `pendingPayload` |
 
 ## License

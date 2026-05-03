@@ -7,7 +7,7 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 import { defineAction } from "../define-action";
 import { useAction } from "../adapter";
 import { resolveFormData } from "../form-data";
-import { registerSlice } from "../registry";
+import { registerSlice, _resetRegistryForTesting } from "../registry";
 import { actionSuccess, actionFailure } from "../action-object";
 
 // ─── Fixtures ────────────────────────────────────────────────────
@@ -32,6 +32,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  _resetRegistryForTesting();
 });
 
 // ─── Route action handler (user-written recipe) ─────────────────

@@ -1,11 +1,7 @@
 // ─── Core ────────────────────────────────────────────────────────
 
 export { defineAction, getDefinitionFor } from "./define-action";
-export type {
-  Action,
-  ActionDefinition,
-  ActionMethod,
-} from "./define-action";
+export type { Action, ActionDefinition, ActionMethod } from "./define-action";
 
 // ─── Registry ───────────────────────────────────────────────────
 
@@ -28,7 +24,4 @@ export { createFormData, resolveFormData } from "./form-data";
 // ─── React Router Adapter ────────────────────────────────────────
 
 export { useAction } from "./adapter";
-export type {
-  UseActionOptions,
-  UseActionState,
-} from "./adapter";
+export type { UseActionOptions, UseActionState } from "./adapter";

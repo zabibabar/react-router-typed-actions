@@ -66,3 +66,8 @@ export function getDefinition(type: string): ActionDefinition {
   }
   return entry.definition;
 }
+
+/** @internal Test-only — clears the global registry between test runs. */
+export function _resetRegistryForTesting(): void {
+  _globalRegistry.clear();
+}
