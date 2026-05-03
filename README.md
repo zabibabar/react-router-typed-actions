@@ -32,17 +32,13 @@ export const createCampaign = defineAction({
   type: "campaign/create",
   resolve: (payload: { name: string; budget: number }) =>
     api.campaigns.create(payload),
-  successMessage: (p) => `"${p.name}" created`,
-  errorMessage: "Failed to create campaign",
 });
 
 export const deleteCampaign = defineAction({
   type: "campaign/delete",
-  method: "delete",
+  method: "DELETE",
   resolve: (payload: { id: string }) =>
     api.campaigns.delete(payload.id),
-  successMessage: "Campaign deleted",
-  errorMessage: (p) => `Failed to delete campaign ${p.id}`,
 });
 ```
 
@@ -77,7 +73,12 @@ Each route's `clientAction` deserializes and executes the action. You own this f
 
 ```typescript
 // lib/handle-action.ts
-import { resolveFormData, type ActionResult } from "react-router-actions";
+import {
+  resolveFormData,
+  actionSuccess,
+  actionFailure,
+  type ActionResult,
+} from "react-router-actions";
 
 export async function handleAction({
   request,
@@ -88,10 +89,10 @@ export async function handleAction({
   const action = resolveFormData(formData);
 
   try {
-    const response = await action.resolve(undefined);
-    return { type: action.type, success: true, response };
+    const response = await action.resolve();
+    return actionSuccess(action, response);
   } catch (error) {
-    return { type: action.type, success: false, error };
+    return actionFailure(action, error);
   }
 }
 ```
@@ -115,9 +116,8 @@ import { useAction } from "react-router-actions";
 import { createCampaign } from "~/domain/campaign/actions";
 
 function CreateCampaignButton() {
-  const [submit, { pending }] = useAction(createCampaign, {
+  const [submit, { state, data }] = useAction(createCampaign, {
     onSuccess: (result) => {
-      // result is typed from createCampaign's resolve return
       navigate(`/campaigns/${result.id}`);
     },
     onError: (error) => {
@@ -128,9 +128,9 @@ function CreateCampaignButton() {
   return (
     <button
       onClick={() => submit({ name: "Summer", budget: 5000 })}
-      disabled={pending}
+      disabled={state !== "idle"}
     >
-      {pending ? "Creating..." : "Create Campaign"}
+      {state === "submitting" ? "Creating..." : "Create Campaign"}
     </button>
   );
 }
@@ -144,16 +144,77 @@ Install to working mutation in under 2 minutes.
 | --- | --- | --- |
 | `type` | *required* | Unique string identifier |
 | `resolve` | *required* | `(payload, context?) => result` |
-| `method` | `"post"` | HTTP method for `fetcher.submit` |
+| `method` | `"POST"` | HTTP method for `fetcher.submit` |
 | `name` | same as `type` | Display name for logging/devtools |
-| `successMessage` | `undefined` | Static string or `(payload) => string` |
-| `errorMessage` | `undefined` | Static string or `(payload) => string` |
+| `meta` | `undefined` | Static metadata (typed via `TMeta` generic) |
+
+## Meta and Dynamic Overrides
+
+Attach static metadata to an action via the `meta` field, typed with the `TMeta` generic:
+
+```typescript
+interface ToastMeta {
+  successMessage: string;
+  errorMessage: string;
+}
+
+const createCampaign = defineAction<
+  "campaign/create",
+  { name: string },
+  { id: string },
+  void,
+  ToastMeta
+>({
+  type: "campaign/create",
+  resolve: (payload) => api.campaigns.create(payload),
+  meta: {
+    successMessage: "Campaign created",
+    errorMessage: "Failed to create campaign",
+  },
+});
+```
+
+Override meta dynamically from within `resolve` using `withMetaOverrides`:
+
+```typescript
+import { defineAction, withMetaOverrides } from "react-router-actions";
+
+const createCampaign = defineAction<
+  "campaign/create",
+  { name: string },
+  { id: string },
+  void,
+  ToastMeta
+>({
+  type: "campaign/create",
+  resolve: async (payload) => {
+    const result = await api.campaigns.create(payload);
+    if (result.requiresApproval) {
+      return withMetaOverrides(result, {
+        successMessage: `"${payload.name}" created — pending approval`,
+      });
+    }
+    return result;
+  },
+  meta: {
+    successMessage: "Campaign created",
+    errorMessage: "Failed to create campaign",
+  },
+});
+```
+
+When `resolve` returns a plain value, the static meta is used. When it returns a `withMetaOverrides` wrapper, the overrides are merged into the static meta for that invocation. The data is unwrapped automatically — consumers always see the raw result.
 
 ## Handler Recipe with Auth and Toasts
 
 ```typescript
 // lib/handle-action.ts
-import { resolveFormData, type ActionResult } from "react-router-actions";
+import {
+  resolveFormData,
+  actionSuccess,
+  actionFailure,
+  type ActionResult,
+} from "react-router-actions";
 import { auth } from "~/auth";
 
 export async function handleAction({
@@ -167,10 +228,10 @@ export async function handleAction({
   try {
     const token = await auth.getTokenSilently();
     const response = await action.resolve(token);
-    return { type: action.type, success: true, response };
+    return actionSuccess(action, response);
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    return { type: action.type, success: false, error };
+    return actionFailure(action, error);
   }
 }
 ```
@@ -180,42 +241,19 @@ export async function handleAction({
 With `onSuccess`/`onError` on the hook, you wire toasts inline — no `useEffect`:
 
 ```tsx
-const [submit, { pending }] = useAction(createCampaign, {
+const [submit, { state }] = useAction(createCampaign, {
   onSuccess: () => toast.success("Campaign created!"),
   onError: (err) => toast.error(String(err)),
 });
 ```
 
-Or read the action's message factories in the handler:
+Or read the action's meta in the handler:
 
 ```typescript
-toast.success(action.successMessage);  // from defineAction or withMessageOverrides
+const response = await action.resolve(token);
+toast.success(action.meta.successMessage);
+return actionSuccess(action, response);
 ```
-
-## `withMessageOverrides`
-
-Override an action's static messages dynamically from within `resolve`:
-
-```typescript
-import { defineAction, withMessageOverrides } from "react-router-actions";
-
-const createCampaign = defineAction({
-  type: "campaign/create",
-  resolve: async (payload: { name: string }) => {
-    const result = await api.campaigns.create(payload);
-    if (result.requiresApproval) {
-      return withMessageOverrides(result, {
-        successMessage: `"${payload.name}" created — pending approval`,
-      });
-    }
-    return result;
-  },
-  successMessage: (p) => `"${p.name}" created`,
-  errorMessage: "Failed to create campaign",
-});
-```
-
-When `resolve` returns a plain value, the static messages are used. When it returns a `withMessageOverrides` wrapper, the overrides replace the static messages for that invocation. The data is unwrapped automatically — consumers always see the raw result.
 
 ## Optimistic UI
 
@@ -287,7 +325,11 @@ The same action definitions work in React Router server `action` exports. The co
 
 ```typescript
 // routes/campaigns.server.ts
-import { resolveFormData, type ActionResult } from "react-router-actions";
+import {
+  resolveFormData,
+  actionSuccess,
+  type ActionResult,
+} from "react-router-actions";
 
 export async function action({
   request,
@@ -295,7 +337,7 @@ export async function action({
   const formData = await request.formData();
   const action = resolveFormData(formData);
   const result = await action.resolve(getServerContext());
-  return { type: action.type, success: true, response: result };
+  return actionSuccess(action, result);
 }
 ```
 
@@ -312,21 +354,30 @@ Payloads are serialized with [SuperJSON](https://github.com/blitz-js/superjson) 
 | Export | Description |
 | --- | --- |
 | `defineAction(config)` | Define a callable action creator from a config object |
-| `withMessageOverrides(data, overrides)` | Wrap a resolve return value with dynamic message overrides |
-| `ActionsProvider` | React component — builds the factory and provides context |
+| `withMetaOverrides(data, overrides)` | Wrap a resolve return value with dynamic meta overrides |
+| `isMetaOverride(value)` | Type guard — returns `true` if the value is a `MetaOverrideResult` |
+| `actionSuccess(action, response)` | Create a success `ActionResult` envelope |
+| `actionFailure(action, error)` | Create a failure `ActionResult` envelope |
+| `resolveFormData(formData)` | Deserialize `FormData` into an `ActionObject` |
+| `createFormData(type, payload)` | Serialize an action type + payload into `FormData` |
+| `getDefinitionFor(creator)` | Retrieve the `ActionDefinition` for an `ActionCreator` |
+| `ActionsProvider` | React component — registers actions and provides context |
 | `useAction(actionCreator, options?)` | Typed hook wrapping `useFetcher` — returns `[submit, state]` tuple |
-| `resolveFormData(formData)` | Deserialize FormData into an ActionObject (reads from singleton) |
 
 ### Types
 
 | Export | Description |
 | --- | --- |
-| `ActionCreator<TType, TPayload, TResult, TContext>` | Callable action creator with definition properties |
-| `ActionDefinition<TType, TPayload, TResult, TContext>` | Shape of an action definition (post-defaults) |
-| `ActionObject<TContext>` | Runtime action instance with `resolve`, `payload`, messages |
+| `ActionCreator<TType, TPayload, TResult, TContext, TMeta>` | Callable action creator with identity properties |
+| `ActionDefinition<TType, TPayload, TResult, TContext, TMeta>` | Shape of an action definition (post-defaults) |
+| `ActionObject<TContext, TMeta>` | Runtime action instance with `resolve`, `payload`, `meta` |
 | `ActionResult<TResult>` | Discriminated union: `{ success: true, response } \| { success: false, error }` |
-| `ActionMethod` | `"get" \| "post" \| "put" \| "patch" \| "delete"` |
-| `MessageFactory<TPayload>` | `string \| ((payload: TPayload) => string)` |
+| `ActionMethod` | `"GET" \| "POST" \| "PUT" \| "PATCH" \| "DELETE"` |
+| `MetaOverrideResult<T, TMeta>` | Tagged wrapper returned by `withMetaOverrides` |
+| `ActionEvent` | Discriminated union of submit/success/error lifecycle events |
+| `ActionEventHandler` | `(event: ActionEvent) => void` |
+| `UseActionOptions<TResult>` | Options for `useAction`: `action?`, `onSuccess?`, `onError?` |
+| `UseActionState<TResult, TPayload>` | State object: `state`, `data`, `pendingPayload` |
 
 ## License
 
