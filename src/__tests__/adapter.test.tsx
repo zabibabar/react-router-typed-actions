@@ -38,10 +38,14 @@ async function routeAction({ request }: { request: Request }) {
   const formData = await request.formData();
   const actionObj = resolveFormData(formData);
   try {
-    const response = await actionObj.resolve(undefined);
+    const response = await actionObj.resolve();
     return { type: actionObj.type, success: true as const, response };
   } catch (err) {
-    return { type: actionObj.type, success: false as const, error: String(err) };
+    return {
+      type: actionObj.type,
+      success: false as const,
+      error: String(err),
+    };
   }
 }
 
@@ -70,16 +74,15 @@ function TestHookConsumer({
   );
 }
 
-function FailHookConsumer({
-  onError,
-}: {
-  onError?: (error: unknown) => void;
-}) {
+function FailHookConsumer({ onError }: { onError?: (error: unknown) => void }) {
   const [submit, { data }] = useAction(failAction, { onError });
 
   return (
     <div>
-      <button onClick={() => submit(undefined as never)} data-testid="fail-submit">
+      <button
+        onClick={() => submit(undefined as never)}
+        data-testid="fail-submit"
+      >
         Fail
       </button>
       {data && <span data-testid="fail-data">{JSON.stringify(data)}</span>}

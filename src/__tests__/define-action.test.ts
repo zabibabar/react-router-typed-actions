@@ -6,14 +6,17 @@ import type { ActionObject } from "../action-object";
 
 const createItem = defineAction({
   type: "createItem",
-  resolve: (payload: { title: string }) => ({ id: "123", title: payload.title }),
+  resolve: (payload: { title: string }) => ({
+    id: "123",
+    title: payload.title,
+  }),
   successMessage: (payload) => `Item "${payload.title}" created`,
   errorMessage: "Failed to create item",
 });
 
 const deleteItem = defineAction({
   type: "deleteItem",
-  method: "delete",
+  method: "DELETE",
   resolve: (payload: { id: string }) => ({ deleted: true }),
   successMessage: "Item deleted",
   errorMessage: (payload) => `Failed to delete item ${payload.id}`,

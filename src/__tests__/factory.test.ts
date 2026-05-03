@@ -17,7 +17,7 @@ const createItem = defineAction({
 
 const deleteItem = defineAction({
   type: "deleteItem",
-  method: "delete",
+  method: "DELETE",
   resolve: (payload: { id: string }) => ({ deleted: true }),
   successMessage: "Deleted",
   errorMessage: (p) => `Failed to delete ${p.id}`,
