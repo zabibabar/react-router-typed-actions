@@ -22,6 +22,20 @@ export type ActionResult<TResult = unknown> =
   | { type: string; success: true; response: TResult }
   | { type: string; success: false; error: unknown };
 
+export function actionSuccess<TResult>(
+  action: Pick<ActionObject, "type">,
+  response: TResult,
+): ActionResult<TResult> {
+  return { type: action.type, success: true, response };
+}
+
+export function actionFailure(
+  action: Pick<ActionObject, "type">,
+  error: unknown,
+): ActionResult<never> {
+  return { type: action.type, success: false, error };
+}
+
 // ─── buildActionObject ───────────────────────────────────────────
 
 export function buildActionObject<TContext = void, TMeta = void>(

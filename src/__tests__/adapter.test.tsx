@@ -1,10 +1,13 @@
 // @vitest-environment happy-dom
 
+import React from "react";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, act, waitFor, cleanup } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { defineAction } from "../define-action";
-import { ActionsProvider, useAction, resolveFormData } from "../adapter";
+import { ActionsProvider, useAction } from "../adapter";
+import { resolveFormData } from "../form-data";
+import { actionSuccess, actionFailure } from "../action-object";
 
 // ─── Fixtures ────────────────────────────────────────────────────
 
@@ -35,13 +38,9 @@ async function routeAction({ request }: { request: Request }) {
   const actionObj = resolveFormData(formData);
   try {
     const response = await actionObj.resolve();
-    return { type: actionObj.type, success: true as const, response };
+    return actionSuccess(actionObj, response);
   } catch (err) {
-    return {
-      type: actionObj.type,
-      success: false as const,
-      error: String(err),
-    };
+    return actionFailure(actionObj, String(err));
   }
 }
 
@@ -414,7 +413,6 @@ describe("multi-provider", () => {
       resolve: () => ({ ok: true }),
     });
 
-    let showProvider = true;
     let rerender: () => void;
 
     function Wrapper() {
@@ -428,8 +426,6 @@ describe("multi-provider", () => {
         <div data-testid="unmounted">gone</div>
       );
     }
-
-    const React = await import("react");
 
     const router = createMemoryRouter([
       {

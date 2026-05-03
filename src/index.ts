@@ -12,15 +12,18 @@ export type {
 export { withMetaOverrides, isMetaOverride } from "./with-meta-overrides";
 export type { MetaOverrideResult } from "./with-meta-overrides";
 
-// ─── Factory ─────────────────────────────────────────────────────
+// ─── Action Object & Result ─────────────────────────────────────
 
-export { createActionsFactory } from "./factory";
-export type { ActionsFactory } from "./factory";
+export { actionSuccess, actionFailure } from "./action-object";
 export type { ActionObject, ActionResult } from "./action-object";
+
+// ─── FormData ───────────────────────────────────────────────────
+
+export { createFormData, resolveFormData } from "./form-data";
 
 // ─── React Router Adapter ────────────────────────────────────────
 
-export { ActionsProvider, useAction, resolveFormData } from "./adapter";
+export { ActionsProvider, useAction } from "./adapter";
 export type {
   ActionEvent,
   ActionEventHandler,

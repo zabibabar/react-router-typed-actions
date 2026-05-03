@@ -1,7 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { defineAction } from "../define-action";
-import { createActionsFactory } from "../factory";
+import { createFormData, resolveFormData } from "../form-data";
+import { registerActions, unregisterActions } from "../registry";
 import { withMetaOverrides } from "../with-meta-overrides";
+import { actionSuccess, actionFailure } from "../action-object";
 
 // ─── Fixtures ────────────────────────────────────────────────────
 
@@ -86,25 +88,34 @@ const noMetaAction = defineAction({
   resolve: (payload: { x: number }) => payload.x * 2,
 });
 
-const factory = createActionsFactory([
+const allActions = [
   createItem,
   deleteItem,
   dynamicAction,
   dynamicErrorAction,
   noMetaAction,
-]);
+];
+let contributedTypes: string[];
+
+beforeEach(() => {
+  contributedTypes = registerActions(allActions);
+});
+
+afterEach(() => {
+  unregisterActions(contributedTypes);
+});
 
 // ─── createFormData / resolveFormData round-trip ─────────────────
 
 describe("createFormData / resolveFormData round-trip", () => {
   it("round-trips a simple payload", () => {
-    const { formData, method } = factory.createFormData("createItem", {
+    const { formData, method } = createFormData("createItem", {
       title: "Widget",
     });
     expect(method).toBe("POST");
     expect(formData.get("actionType")).toBe("createItem");
 
-    const action = factory.resolveFormData(formData);
+    const action = resolveFormData(formData);
     expect(action.type).toBe("createItem");
     expect(action.name).toBe("createItem");
     expect(action.method).toBe("POST");
@@ -116,12 +127,14 @@ describe("createFormData / resolveFormData round-trip", () => {
       type: "dateAction",
       resolve: (p: { ts: Date }) => p,
     });
-    const f = createActionsFactory([dateAction]);
+    const types = registerActions([dateAction]);
 
     const date = new Date("2025-06-15T12:00:00Z");
-    const { formData } = f.createFormData("dateAction", { ts: date });
-    const action = f.resolveFormData(formData);
+    const { formData } = createFormData("dateAction", { ts: date });
+    const action = resolveFormData(formData);
     expect(action.payload).toEqual({ ts: date });
+
+    unregisterActions(types);
   });
 
   it("round-trips a File in payload", () => {
@@ -129,15 +142,17 @@ describe("createFormData / resolveFormData round-trip", () => {
       type: "fileAction",
       resolve: (p: { doc: File }) => ({ ok: true }),
     });
-    const f = createActionsFactory([fileAction]);
+    const types = registerActions([fileAction]);
 
     const file = new File(["content"], "test.txt", { type: "text/plain" });
-    const { formData } = f.createFormData("fileAction", { doc: file });
+    const { formData } = createFormData("fileAction", { doc: file });
 
     expect(formData.get("file:doc")).toBeInstanceOf(Blob);
 
-    const action = f.resolveFormData(formData);
+    const action = resolveFormData(formData);
     expect((action.payload as { doc: File }).doc).toBeInstanceOf(Blob);
+
+    unregisterActions(types);
   });
 });
 
@@ -145,10 +160,10 @@ describe("createFormData / resolveFormData round-trip", () => {
 
 describe("ActionObject from resolveFormData", () => {
   it("has correct shape", () => {
-    const { formData } = factory.createFormData("createItem", {
+    const { formData } = createFormData("createItem", {
       title: "Hello",
     });
-    const action = factory.resolveFormData(formData);
+    const action = resolveFormData(formData);
     expect(action.type).toBe("createItem");
     expect(action.name).toBe("createItem");
     expect(action.method).toBe("POST");
@@ -157,19 +172,19 @@ describe("ActionObject from resolveFormData", () => {
   });
 
   it("resolve returns the expected result", async () => {
-    const { formData } = factory.createFormData("createItem", {
+    const { formData } = createFormData("createItem", {
       title: "Test",
     });
-    const action = factory.resolveFormData(formData);
+    const action = resolveFormData(formData);
     const result = await action.resolve();
     expect(result).toEqual({ id: "123", title: "Test" });
   });
 
   it("meta returns static meta from definition", () => {
-    const { formData } = factory.createFormData("createItem", {
+    const { formData } = createFormData("createItem", {
       title: "Widget",
     });
-    const action = factory.resolveFormData(formData);
+    const action = resolveFormData(formData);
     expect(action.meta).toEqual({
       successMessage: "Item created",
       errorMessage: "Failed to create item",
@@ -177,8 +192,8 @@ describe("ActionObject from resolveFormData", () => {
   });
 
   it("meta is undefined when definition omits it", () => {
-    const { formData } = factory.createFormData("noMetaAction", { x: 5 });
-    const action = factory.resolveFormData(formData);
+    const { formData } = createFormData("noMetaAction", { x: 5 });
+    const action = resolveFormData(formData);
     expect(action.meta).toBeUndefined();
   });
 });
@@ -187,15 +202,15 @@ describe("ActionObject from resolveFormData", () => {
 
 describe("invalid / missing input", () => {
   it("throws for unknown action type in createFormData", () => {
-    expect(() => factory.createFormData("nonExistent", {})).toThrow(
-      'Invalid action type "nonExistent"',
+    expect(() => createFormData("nonExistent", {})).toThrow(
+      'Unknown action type "nonExistent"',
     );
   });
 
   it("throws for missing actionType in FormData", () => {
     const formData = new FormData();
     formData.set("payload", '{"json":"{}"}');
-    expect(() => factory.resolveFormData(formData)).toThrow(
+    expect(() => resolveFormData(formData)).toThrow(
       "missing actionType or payload",
     );
   });
@@ -203,7 +218,7 @@ describe("invalid / missing input", () => {
   it("throws for missing payload in FormData", () => {
     const formData = new FormData();
     formData.set("actionType", "createItem");
-    expect(() => factory.resolveFormData(formData)).toThrow(
+    expect(() => resolveFormData(formData)).toThrow(
       "missing actionType or payload",
     );
   });
@@ -212,8 +227,8 @@ describe("invalid / missing input", () => {
     const formData = new FormData();
     formData.set("actionType", "unknown");
     formData.set("payload", '{"json":"{}"}');
-    expect(() => factory.resolveFormData(formData)).toThrow(
-      'Invalid action type "unknown"',
+    expect(() => resolveFormData(formData)).toThrow(
+      'Unknown action type "unknown"',
     );
   });
 });
@@ -222,10 +237,10 @@ describe("invalid / missing input", () => {
 
 describe("withMetaOverrides through resolve", () => {
   it("returns static meta before resolve is called", () => {
-    const { formData } = factory.createFormData("dynamicAction", {
+    const { formData } = createFormData("dynamicAction", {
       name: "Test",
     });
-    const action = factory.resolveFormData(formData);
+    const action = resolveFormData(formData);
     expect(action.meta).toEqual({
       successMessage: "Default success",
       errorMessage: "Default error",
@@ -233,10 +248,10 @@ describe("withMetaOverrides through resolve", () => {
   });
 
   it("merges dynamic overrides into meta after resolve", async () => {
-    const { formData } = factory.createFormData("dynamicAction", {
+    const { formData } = createFormData("dynamicAction", {
       name: "TestItem",
     });
-    const action = factory.resolveFormData(formData);
+    const action = resolveFormData(formData);
     await action.resolve();
     expect(action.meta).toEqual({
       successMessage: "TestItem processed successfully",
@@ -245,10 +260,10 @@ describe("withMetaOverrides through resolve", () => {
   });
 
   it("merges dynamic error overrides into meta after resolve", async () => {
-    const { formData } = factory.createFormData("dynamicErrorAction", {
+    const { formData } = createFormData("dynamicErrorAction", {
       name: "BadItem",
     });
-    const action = factory.resolveFormData(formData);
+    const action = resolveFormData(formData);
     await action.resolve();
     expect(action.meta).toEqual({
       successMessage: "Default success",
@@ -257,23 +272,49 @@ describe("withMetaOverrides through resolve", () => {
   });
 
   it("unwraps data from MetaOverrideResult", async () => {
-    const { formData } = factory.createFormData("dynamicAction", {
+    const { formData } = createFormData("dynamicAction", {
       name: "Test",
     });
-    const action = factory.resolveFormData(formData);
+    const action = resolveFormData(formData);
     const result = await action.resolve();
     expect(result).toEqual({ processed: true });
   });
 
   it("keeps static meta when resolve returns raw data", async () => {
-    const { formData } = factory.createFormData("createItem", {
+    const { formData } = createFormData("createItem", {
       title: "Widget",
     });
-    const action = factory.resolveFormData(formData);
+    const action = resolveFormData(formData);
     await action.resolve();
     expect(action.meta).toEqual({
       successMessage: "Item created",
       errorMessage: "Failed to create item",
+    });
+  });
+});
+
+// ─── actionSuccess / actionFailure helpers ───────────────────────
+
+describe("actionSuccess / actionFailure", () => {
+  it("actionSuccess creates a success result", () => {
+    const { formData } = createFormData("createItem", { title: "Test" });
+    const action = resolveFormData(formData);
+    const result = actionSuccess(action, { id: "1", title: "Test" });
+    expect(result).toEqual({
+      type: "createItem",
+      success: true,
+      response: { id: "1", title: "Test" },
+    });
+  });
+
+  it("actionFailure creates a failure result", () => {
+    const { formData } = createFormData("createItem", { title: "Test" });
+    const action = resolveFormData(formData);
+    const result = actionFailure(action, "Something went wrong");
+    expect(result).toEqual({
+      type: "createItem",
+      success: false,
+      error: "Something went wrong",
     });
   });
 });

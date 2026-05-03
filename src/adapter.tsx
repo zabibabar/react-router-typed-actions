@@ -11,11 +11,10 @@ import {
   type ReactElement,
 } from "react";
 import { useFetcher } from "react-router";
-import type { ActionCreator, ActionDefinition } from "./define-action";
-import { createActionsFactory } from "./factory";
-import type { ActionObject, ActionResult } from "./action-object";
-import { buildActionObject } from "./action-object";
-import { deserialize, serialize, type FileEntry } from "./serialization";
+import type { ActionCreator } from "./define-action";
+import type { ActionResult } from "./action-object";
+import { registerActions, unregisterActions } from "./registry";
+import { createFormData, deserializePayload } from "./form-data";
 
 // ─── Action Events ───────────────────────────────────────────────
 
@@ -50,16 +49,9 @@ function defaultDebugLogger(event: ActionEvent): void {
   }
 }
 
-// ─── Global Registry ─────────────────────────────────────────────
-
-const _globalRegistry = new Map<string, ActionDefinition>();
-
 // ─── Context ─────────────────────────────────────────────────────
 
-type Factory = ReturnType<typeof createActionsFactory>;
-
 interface ActionsContextValue {
-  factory: Factory;
   emitEvent: ActionEventHandler | null;
 }
 
@@ -80,8 +72,6 @@ export function ActionsProvider({
   onAction,
   children,
 }: ActionsProviderProps): ReactElement {
-  const factory = useMemo(() => createActionsFactory(actions), [actions]);
-
   const emitEvent = useCallback<ActionEventHandler>(
     (event) => {
       if (debug) defaultDebugLogger(event);
@@ -93,30 +83,15 @@ export function ActionsProvider({
   const hasListeners = debug || onAction;
 
   useEffect(() => {
-    const contributedTypes: string[] = [];
-
-    for (const creator of actions) {
-      const def = (creator as any)._definition as ActionDefinition;
-      if (_globalRegistry.has(creator.type)) {
-        throw new Error(
-          `react-router-actions: Duplicate action type "${creator.type}" — ` +
-            `already registered by another ActionsProvider.`,
-        );
-      }
-      _globalRegistry.set(creator.type, def);
-      contributedTypes.push(creator.type);
-    }
-
+    const contributedTypes = registerActions(actions);
     return () => {
-      for (const type of contributedTypes) {
-        _globalRegistry.delete(type);
-      }
+      unregisterActions(contributedTypes);
     };
   }, [actions]);
 
   const contextValue = useMemo<ActionsContextValue>(
-    () => ({ factory, emitEvent: hasListeners ? emitEvent : null }),
-    [factory, emitEvent, hasListeners],
+    () => ({ emitEvent: hasListeners ? emitEvent : null }),
+    [emitEvent, hasListeners],
   );
 
   return (
@@ -157,7 +132,7 @@ export function useAction<
     );
   }
 
-  const { factory, emitEvent } = ctx;
+  const { emitEvent } = ctx;
   const fetcher = useFetcher<ActionResult<TResult>>();
   const prevDataRef = useRef<ActionResult<TResult> | undefined>(undefined);
   const submitTimestampRef = useRef<number>(0);
@@ -172,10 +147,7 @@ export function useAction<
       timestamp: submitTimestampRef.current,
     });
 
-    const { formData, method } = factory.createFormData(
-      action.type,
-      payload,
-    );
+    const { formData, method } = createFormData(action.type, payload);
     fetcher.submit(formData, {
       method,
       ...(options?.action ? { action: options.action } : {}),
@@ -217,16 +189,8 @@ export function useAction<
 
   const pendingPayload = useMemo<TPayload | undefined>(() => {
     if (!fetcher.formData) return undefined;
-    const raw = fetcher.formData.get("payload");
-    if (typeof raw !== "string") return undefined;
     try {
-      const files: FileEntry[] = [];
-      for (const [key, value] of fetcher.formData.entries()) {
-        if (key.startsWith("file:") && value instanceof Blob) {
-          files.push({ path: key.slice(5), file: value });
-        }
-      }
-      return deserialize(raw, files) as TPayload;
+      return deserializePayload(fetcher.formData) as TPayload;
     } catch {
       return undefined;
     }
@@ -240,38 +204,4 @@ export function useAction<
       pendingPayload,
     },
   ];
-}
-
-// ─── Module-level resolveFormData (reads from global registry) ───
-
-export function resolveFormData(formData: FormData): ActionObject<any, any> {
-  const actionType = formData.get("actionType");
-  const encodedPayload = formData.get("payload");
-
-  if (
-    typeof actionType !== "string" ||
-    typeof encodedPayload !== "string"
-  ) {
-    throw new Error(
-      "react-router-actions: Invalid FormData — missing actionType or payload.",
-    );
-  }
-
-  const def = _globalRegistry.get(actionType);
-  if (!def) {
-    throw new Error(
-      `react-router-actions: Unknown action type "${actionType}". ` +
-        "Ensure an ActionsProvider registering this action is mounted.",
-    );
-  }
-
-  const files: FileEntry[] = [];
-  for (const [key, value] of formData.entries()) {
-    if (key.startsWith("file:") && value instanceof Blob) {
-      files.push({ path: key.slice(5), file: value });
-    }
-  }
-
-  const payload = deserialize(encodedPayload, files);
-  return buildActionObject(def, payload);
 }

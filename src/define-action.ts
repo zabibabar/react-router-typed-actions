@@ -1,10 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { buildActionObject, type ActionObject } from "./action-object";
+import type { MetaOverrideResult } from "./with-meta-overrides";
 
 // ─── Core types ───────────────────────────────────────────────────
 
 export type ActionMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+
+type ResolveReturn<TResult, TMeta> =
+  | TResult
+  | MetaOverrideResult<TResult, TMeta>
+  | Promise<TResult>
+  | Promise<MetaOverrideResult<TResult, TMeta>>;
 
 export interface ActionDefinition<
   TType extends string = string,
@@ -19,7 +26,7 @@ export interface ActionDefinition<
   readonly resolve: (
     payload: TPayload,
     context: TContext,
-  ) => TResult | Promise<TResult>;
+  ) => ResolveReturn<TResult, TMeta>;
   readonly meta: TMeta;
 }
 
@@ -53,7 +60,7 @@ type DefineActionConfig<
   resolve: (
     payload: TPayload,
     context: TContext,
-  ) => TResult | Promise<TResult>;
+  ) => ResolveReturn<TResult, TMeta>;
 } & ([TMeta] extends [void] ? { meta?: never } : { meta: TMeta });
 
 export function defineAction<
