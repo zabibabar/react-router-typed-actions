@@ -64,13 +64,13 @@ describe("createFormData / resolveFormData round-trip", () => {
     const { formData, method } = factory.createFormData("createItem", {
       title: "Widget",
     });
-    expect(method).toBe("post");
+    expect(method).toBe("POST");
     expect(formData.get("actionType")).toBe("createItem");
 
     const action = factory.resolveFormData(formData);
     expect(action.type).toBe("createItem");
     expect(action.name).toBe("createItem");
-    expect(action.method).toBe("post");
+    expect(action.method).toBe("POST");
     expect(action.payload).toEqual({ title: "Widget" });
   });
 
@@ -114,7 +114,7 @@ describe("ActionObject from resolveFormData", () => {
     const action = factory.resolveFormData(formData);
     expect(action.type).toBe("createItem");
     expect(action.name).toBe("createItem");
-    expect(action.method).toBe("post");
+    expect(action.method).toBe("POST");
     expect(action.payload).toEqual({ title: "Hello" });
     expect(typeof action.resolve).toBe("function");
   });
@@ -124,7 +124,7 @@ describe("ActionObject from resolveFormData", () => {
       title: "Test",
     });
     const action = factory.resolveFormData(formData);
-    const result = await action.resolve(undefined);
+    const result = await action.resolve();
     expect(result).toEqual({ id: "123", title: "Test" });
   });
 
@@ -133,7 +133,7 @@ describe("ActionObject from resolveFormData", () => {
       title: "Widget",
     });
     const action = factory.resolveFormData(formData);
-    await action.resolve(undefined);
+    await action.resolve();
     expect(action.successMessage).toBe('Item "Widget" created');
   });
 
@@ -156,7 +156,7 @@ describe("ActionObject from resolveFormData", () => {
 describe("invalid / missing input", () => {
   it("throws for unknown action type in createFormData", () => {
     expect(() => factory.createFormData("nonExistent", {})).toThrow(
-      'Unknown action type "nonExistent"',
+      'Invalid action type "nonExistent"',
     );
   });
 
@@ -181,7 +181,7 @@ describe("invalid / missing input", () => {
     formData.set("actionType", "unknown");
     formData.set("payload", '{"json":"{}"}');
     expect(() => factory.resolveFormData(formData)).toThrow(
-      'Unknown action type "unknown"',
+      'Invalid action type "unknown"',
     );
   });
 });
@@ -202,7 +202,7 @@ describe("withMessageOverrides through resolve", () => {
       name: "TestItem",
     });
     const action = factory.resolveFormData(formData);
-    await action.resolve(undefined);
+    await action.resolve();
     expect(action.successMessage).toBe("TestItem processed successfully");
   });
 
@@ -211,7 +211,7 @@ describe("withMessageOverrides through resolve", () => {
       name: "BadItem",
     });
     const action = factory.resolveFormData(formData);
-    await action.resolve(undefined);
+    await action.resolve();
     expect(action.errorMessage).toBe("BadItem failed dynamically");
   });
 
@@ -220,7 +220,7 @@ describe("withMessageOverrides through resolve", () => {
       name: "Test",
     });
     const action = factory.resolveFormData(formData);
-    const result = await action.resolve(undefined);
+    const result = await action.resolve();
     expect(result).toEqual({ processed: true });
   });
 
@@ -229,7 +229,7 @@ describe("withMessageOverrides through resolve", () => {
       title: "Widget",
     });
     const action = factory.resolveFormData(formData);
-    await action.resolve(undefined);
+    await action.resolve();
     expect(action.successMessage).toBe('Item "Widget" created');
   });
 });

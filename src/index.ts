@@ -12,9 +12,11 @@ export type {
 
 export { withMessageOverrides } from "./with-message-overrides";
 
-// ─── Factory types ───────────────────────────────────────────────
+// ─── Factory ─────────────────────────────────────────────────────
 
-export type { ActionObject, ActionResult } from "./action-object";
+export { createActionsFactory } from "./factory";
+export type { ActionsFactory } from "./factory";
+export type { ActionObject, ActionObjectOptions, ActionResult } from "./action-object";
 
 // ─── React Router Adapter ────────────────────────────────────────
 

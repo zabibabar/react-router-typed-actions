@@ -5,11 +5,19 @@ import { isMessageOverride } from "./with-message-overrides";
 
 // ─── ActionObject ─────────────────────────────────────────────────
 
+export interface ActionObjectOptions {
+  showLoadingToast?: boolean;
+  loadingMessage?: string;
+  successMessageOverride?: string;
+  errorMessageOverride?: string;
+}
+
 export interface ActionObject<TContext = void> {
   readonly type: string;
   readonly name: string;
   readonly method: ActionMethod;
   readonly payload: unknown;
+  readonly options: ActionObjectOptions;
   resolve: [TContext] extends [void]
     ? () => Promise<unknown>
     : (context: TContext) => Promise<unknown>;
@@ -38,6 +46,7 @@ export function resolveMessage(
 export function buildActionObject<TContext = void>(
   def: ActionDefinition<string, any, any, TContext>,
   payload: unknown,
+  options: ActionObjectOptions = {},
 ): ActionObject<TContext> {
   let dynamicSuccess: string | undefined;
   let dynamicError: string | undefined;
@@ -47,21 +56,33 @@ export function buildActionObject<TContext = void>(
     name: def.name,
     method: def.method,
     payload,
+    options,
     async resolve(context: TContext) {
-      const raw = await def.resolve(payload, context);
-      if (isMessageOverride(raw)) {
-        dynamicSuccess = raw.overrides.successMessage;
-        dynamicError = raw.overrides.errorMessage;
-        return raw.data;
+      try {
+        const raw = await def.resolve(payload, context);
+        if (isMessageOverride(raw)) {
+          dynamicSuccess = raw.overrides.successMessage;
+          dynamicError = raw.overrides.errorMessage;
+          return raw.data;
+        }
+        return raw;
+      } catch (error) {
+        if (isMessageOverride(error)) {
+          dynamicSuccess = error.overrides.successMessage;
+          dynamicError = error.overrides.errorMessage;
+          throw error.data;
+        }
+        throw error;
       }
-      return raw;
     },
     get successMessage() {
       if (dynamicSuccess !== undefined) return dynamicSuccess;
+      if (options.successMessageOverride !== undefined) return options.successMessageOverride;
       return resolveMessage(def.successMessage, payload);
     },
     get errorMessage() {
       if (dynamicError !== undefined) return dynamicError;
+      if (options.errorMessageOverride !== undefined) return options.errorMessageOverride;
       return resolveMessage(def.errorMessage, payload);
     },
   };

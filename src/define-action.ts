@@ -4,7 +4,7 @@ import { buildActionObject, type ActionObject } from "./action-object";
 
 // ─── Core types ───────────────────────────────────────────────────
 
-export type ActionMethod = "get" | "post" | "put" | "patch" | "delete";
+export type ActionMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export type MessageFactory<TPayload> =
   | string
@@ -59,7 +59,7 @@ export function defineAction<
   const definition: ActionDefinition<TType, TPayload, TResult, TContext> = {
     type: config.type,
     name: config.name ?? config.type,
-    method: config.method ?? "post",
+    method: config.method ?? "POST",
     resolve: config.resolve,
     successMessage: config.successMessage,
     errorMessage: config.errorMessage,

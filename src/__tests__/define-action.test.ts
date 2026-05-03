@@ -37,7 +37,7 @@ const minimalAction = defineAction({
 describe("defineAction", () => {
   it("returns an ActionCreator with definition properties", () => {
     expect(createItem.type).toBe("createItem");
-    expect(createItem.method).toBe("post");
+    expect(createItem.method).toBe("POST");
     expect(createItem.name).toBe("createItem");
     expect(typeof createItem.resolve).toBe("function");
     expect(typeof createItem.successMessage).toBe("function");
@@ -45,7 +45,7 @@ describe("defineAction", () => {
   });
 
   it("defaults method to 'post'", () => {
-    expect(minimalAction.method).toBe("post");
+    expect(minimalAction.method).toBe("POST");
   });
 
   it("defaults name to type", () => {
@@ -78,7 +78,7 @@ describe("ActionCreator callable", () => {
     const action = createItem({ title: "Widget" });
     expect(action.type).toBe("createItem");
     expect(action.name).toBe("createItem");
-    expect(action.method).toBe("post");
+    expect(action.method).toBe("POST");
     expect(action.payload).toEqual({ title: "Widget" });
     expect(typeof action.resolve).toBe("function");
   });
