@@ -1,6 +1,7 @@
 import superjson from "superjson";
 
 const FILE_SENTINEL = "__file" as const;
+const MAX_DEPTH = 32;
 
 export interface FileEntry {
   path: string;
@@ -35,7 +36,14 @@ function extractFiles(
   value: unknown,
   path: string,
   files: FileEntry[],
+  depth: number = 0,
 ): unknown {
+  if (depth >= MAX_DEPTH) {
+    throw new Error(
+      `react-router-actions: Payload exceeds maximum nesting depth of ${MAX_DEPTH}.`,
+    );
+  }
+
   if (value == null || typeof value !== "object") return value;
 
   if (isFileLike(value)) {
@@ -45,14 +53,14 @@ function extractFiles(
 
   if (Array.isArray(value)) {
     return value.map((item, i) =>
-      extractFiles(item, joinPath(path, i), files),
+      extractFiles(item, joinPath(path, i), files, depth + 1),
     );
   }
 
   if (value instanceof Map) {
     const result = new Map();
     for (const [k, v] of value) {
-      result.set(k, extractFiles(v, joinPath(path, `_map_${String(k)}`), files));
+      result.set(k, extractFiles(v, joinPath(path, `_map_${String(k)}`), files, depth + 1));
     }
     return result;
   }
@@ -61,7 +69,7 @@ function extractFiles(
     const arr: unknown[] = [];
     let i = 0;
     for (const v of value) {
-      arr.push(extractFiles(v, joinPath(path, `_set_${i}`), files));
+      arr.push(extractFiles(v, joinPath(path, `_set_${i}`), files, depth + 1));
       i++;
     }
     return new Set(arr);
@@ -75,6 +83,7 @@ function extractFiles(
       (value as Record<string, unknown>)[key],
       joinPath(path, key),
       files,
+      depth + 1,
     );
   }
   return result;
@@ -83,7 +92,14 @@ function extractFiles(
 function reinsertFiles(
   value: unknown,
   fileMap: Map<string, File | Blob>,
+  depth: number = 0,
 ): unknown {
+  if (depth >= MAX_DEPTH) {
+    throw new Error(
+      `react-router-actions: Payload exceeds maximum nesting depth of ${MAX_DEPTH}.`,
+    );
+  }
+
   if (value == null || typeof value !== "object") return value;
 
   if (isFileSentinel(value)) {
@@ -93,13 +109,13 @@ function reinsertFiles(
   if (isFileLike(value)) return value;
 
   if (Array.isArray(value)) {
-    return value.map((item) => reinsertFiles(item, fileMap));
+    return value.map((item) => reinsertFiles(item, fileMap, depth + 1));
   }
 
   if (value instanceof Map) {
     const result = new Map();
     for (const [k, v] of value) {
-      result.set(k, reinsertFiles(v, fileMap));
+      result.set(k, reinsertFiles(v, fileMap, depth + 1));
     }
     return result;
   }
@@ -107,7 +123,7 @@ function reinsertFiles(
   if (value instanceof Set) {
     const result = new Set();
     for (const v of value) {
-      result.add(reinsertFiles(v, fileMap));
+      result.add(reinsertFiles(v, fileMap, depth + 1));
     }
     return result;
   }
@@ -119,6 +135,7 @@ function reinsertFiles(
     result[key] = reinsertFiles(
       (value as Record<string, unknown>)[key],
       fileMap,
+      depth + 1,
     );
   }
   return result;

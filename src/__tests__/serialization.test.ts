@@ -161,4 +161,12 @@ describe("serialize/deserialize — edge cases", () => {
     const result = deserialize(encoded, files) as typeof payload;
     expect(result.file).toBe(file);
   });
+
+  it("throws when payload exceeds maximum nesting depth", () => {
+    let deep: Record<string, unknown> = { leaf: true };
+    for (let i = 0; i < 35; i++) {
+      deep = { nested: deep };
+    }
+    expect(() => serialize(deep)).toThrow("maximum nesting depth");
+  });
 });
