@@ -11,10 +11,11 @@ import {
   type ReactElement,
 } from "react";
 import { useFetcher } from "react-router";
-import type { ActionCreator } from "./define-action";
+import type { ActionCreator, ActionDefinition } from "./define-action";
 import { createActionsFactory } from "./factory";
 import type { ActionObject, ActionResult } from "./action-object";
-import { deserialize, type FileEntry } from "./serialization";
+import { buildActionObject } from "./action-object";
+import { deserialize, serialize, type FileEntry } from "./serialization";
 
 // ─── Action Events ───────────────────────────────────────────────
 
@@ -49,25 +50,13 @@ function defaultDebugLogger(event: ActionEvent): void {
   }
 }
 
-// ─── Module-level singleton ──────────────────────────────────────
+// ─── Global Registry ─────────────────────────────────────────────
 
-type Factory = ReturnType<typeof createActionsFactory>;
-
-let _factory: Factory | null = null;
-let _emitEvent: ActionEventHandler | null = null;
-let _mountCount = 0;
-
-function getFactory(): Factory {
-  if (!_factory) {
-    throw new Error(
-      "react-router-actions: ActionsProvider has not been mounted. " +
-        "Wrap your app in <ActionsProvider> before calling resolveFormData.",
-    );
-  }
-  return _factory;
-}
+const _globalRegistry = new Map<string, ActionDefinition>();
 
 // ─── Context ─────────────────────────────────────────────────────
+
+type Factory = ReturnType<typeof createActionsFactory>;
 
 interface ActionsContextValue {
   factory: Factory;
@@ -79,7 +68,7 @@ const ActionsContext = createContext<ActionsContextValue | null>(null);
 // ─── ActionsProvider ─────────────────────────────────────────────
 
 export interface ActionsProviderProps {
-  actions: ActionCreator<string, any, any, any>[];
+  actions: ActionCreator<string, any, any, any, any>[];
   debug?: boolean;
   onAction?: ActionEventHandler;
   children: ReactNode;
@@ -103,25 +92,27 @@ export function ActionsProvider({
 
   const hasListeners = debug || onAction;
 
-  _factory = factory;
-  _emitEvent = hasListeners ? emitEvent : null;
-
   useEffect(() => {
-    _mountCount++;
-    if (process.env.NODE_ENV !== "production" && _mountCount > 2) {
-      console.warn(
-        "react-router-actions: ActionsProvider mounted more than once. " +
-          "This may cause unexpected behavior.",
-      );
+    const contributedTypes: string[] = [];
+
+    for (const creator of actions) {
+      const def = (creator as any)._definition as ActionDefinition;
+      if (_globalRegistry.has(creator.type)) {
+        throw new Error(
+          `react-router-actions: Duplicate action type "${creator.type}" — ` +
+            `already registered by another ActionsProvider.`,
+        );
+      }
+      _globalRegistry.set(creator.type, def);
+      contributedTypes.push(creator.type);
     }
+
     return () => {
-      _mountCount--;
-      if (_mountCount === 0) {
-        _factory = null;
-        _emitEvent = null;
+      for (const type of contributedTypes) {
+        _globalRegistry.delete(type);
       }
     };
-  }, []);
+  }, [actions]);
 
   const contextValue = useMemo<ActionsContextValue>(
     () => ({ factory, emitEvent: hasListeners ? emitEvent : null }),
@@ -144,7 +135,7 @@ export interface UseActionOptions<TResult> {
 }
 
 export interface UseActionState<TResult, TPayload> {
-  pending: boolean;
+  state: "idle" | "submitting" | "loading";
   data: ActionResult<TResult> | undefined;
   pendingPayload: TPayload | undefined;
 }
@@ -154,8 +145,9 @@ export function useAction<
   TPayload,
   TResult,
   TContext,
+  TMeta,
 >(
-  action: ActionCreator<TType, TPayload, TResult, TContext>,
+  action: ActionCreator<TType, TPayload, TResult, TContext, TMeta>,
   options?: UseActionOptions<TResult>,
 ): [submit: (payload: TPayload) => void, state: UseActionState<TResult, TPayload>] {
   const ctx = useContext(ActionsContext);
@@ -243,15 +235,43 @@ export function useAction<
   return [
     submit,
     {
-      pending: fetcher.state !== "idle",
+      state: fetcher.state,
       data: fetcher.data,
       pendingPayload,
     },
   ];
 }
 
-// ─── Module-level functions (read from singleton) ────────────────
+// ─── Module-level resolveFormData (reads from global registry) ───
 
-export function resolveFormData(formData: FormData): ActionObject<any> {
-  return getFactory().resolveFormData(formData);
+export function resolveFormData(formData: FormData): ActionObject<any, any> {
+  const actionType = formData.get("actionType");
+  const encodedPayload = formData.get("payload");
+
+  if (
+    typeof actionType !== "string" ||
+    typeof encodedPayload !== "string"
+  ) {
+    throw new Error(
+      "react-router-actions: Invalid FormData — missing actionType or payload.",
+    );
+  }
+
+  const def = _globalRegistry.get(actionType);
+  if (!def) {
+    throw new Error(
+      `react-router-actions: Unknown action type "${actionType}". ` +
+        "Ensure an ActionsProvider registering this action is mounted.",
+    );
+  }
+
+  const files: FileEntry[] = [];
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith("file:") && value instanceof Blob) {
+      files.push({ path: key.slice(5), file: value });
+    }
+  }
+
+  const payload = deserialize(encodedPayload, files);
+  return buildActionObject(def, payload);
 }

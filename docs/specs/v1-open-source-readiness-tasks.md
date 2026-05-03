@@ -62,7 +62,7 @@ Replace `successMessage`/`errorMessage` getters and `ActionObjectOptions` with a
 ### 4. Thread TMeta through factory and remove options (AFK)
 Add the `TMeta` generic to `ActionsFactory` and `createActionsFactory`. Remove `ActionObjectOptions` from `createFormData` and the `options` FormData field from `resolveFormData`.
 
-**Status:** in-progress
+**Status:** committed
 **Blocked by:** 2, 3
 **Not this task:** Adapter/provider changes (Task 5), barrel export updates (Task 6)
 
@@ -80,7 +80,7 @@ Add the `TMeta` generic to `ActionsFactory` and `createActionsFactory`. Remove `
 ### 5. Multi-provider architecture and useAction state alignment (AFK)
 Replace the singleton `_factory` with a global additive registry and scoped React context. Replace `pending: boolean` with `state: "idle" | "submitting" | "loading"` on `useAction`. Remove `ActionObjectOptions` serialization from `submit`.
 
-**Status:** pending
+**Status:** in-progress
 **Blocked by:** 2, 3, 4
 **Not this task:** Barrel export updates (Task 6)
 

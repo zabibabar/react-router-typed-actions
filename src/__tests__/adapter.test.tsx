@@ -13,8 +13,6 @@ const testAction = defineAction({
   resolve: (payload: { name: string }) => ({
     greeting: `Hello ${payload.name}`,
   }),
-  successMessage: (p) => `Done: ${p.name}`,
-  errorMessage: "Failed",
 });
 
 const failAction = defineAction({
@@ -22,8 +20,6 @@ const failAction = defineAction({
   resolve: () => {
     throw new Error("Boom");
   },
-  successMessage: "ok",
-  errorMessage: "Something went wrong",
 });
 
 const actions = [testAction, failAction];
@@ -58,7 +54,7 @@ function TestHookConsumer({
   onSuccess?: (result: { greeting: string }) => void;
   onError?: (error: unknown) => void;
 }) {
-  const [submit, { pending, data }] = useAction(testAction, {
+  const [submit, { state, data }] = useAction(testAction, {
     onSuccess,
     onError,
   });
@@ -68,7 +64,7 @@ function TestHookConsumer({
       <button onClick={() => submit({ name: "World" })} data-testid="submit">
         Submit
       </button>
-      <span data-testid="pending">{String(pending)}</span>
+      <span data-testid="state">{state}</span>
       {data && <span data-testid="data">{JSON.stringify(data)}</span>}
     </div>
   );
@@ -133,10 +129,13 @@ describe("useAction — outside provider", () => {
   });
 });
 
-describe("singleton — before mount", () => {
-  it("resolveFormData throws when singleton is not set", () => {
-    expect(() => resolveFormData(new FormData())).toThrow(
-      "ActionsProvider has not been mounted",
+describe("resolveFormData — before mount", () => {
+  it("throws when no provider is mounted", () => {
+    const formData = new FormData();
+    formData.set("actionType", "testAction");
+    formData.set("payload", '{"json":"{}"}');
+    expect(() => resolveFormData(formData)).toThrow(
+      'Unknown action type "testAction"',
     );
   });
 });
@@ -168,9 +167,33 @@ describe("useAction — integration", () => {
     expect(Array.isArray(tupleResult)).toBe(true);
     const [submit, state] = tupleResult as [unknown, unknown];
     expect(typeof submit).toBe("function");
-    expect(state).toHaveProperty("pending");
+    expect(state).toHaveProperty("state");
     expect(state).toHaveProperty("data");
     expect(state).toHaveProperty("pendingPayload");
+  });
+
+  it("state is 'idle' initially", () => {
+    let capturedState: string | undefined;
+
+    function Inspector() {
+      const [, { state }] = useAction(testAction);
+      capturedState = state;
+      return null;
+    }
+
+    const router = createMemoryRouter([
+      {
+        path: "/",
+        Component: () => (
+          <ActionsProvider actions={actions}>
+            <Inspector />
+          </ActionsProvider>
+        ),
+      },
+    ]);
+
+    render(<RouterProvider router={router} />);
+    expect(capturedState).toBe("idle");
   });
 
   it("submit → action → response round-trip", async () => {
@@ -280,5 +303,155 @@ describe("useAction — integration", () => {
       expect(onError).toHaveBeenCalledTimes(1);
       expect(onError).toHaveBeenCalledWith(expect.stringContaining("Boom"));
     });
+  });
+});
+
+// ─── Multi-provider tests ────────────────────────────────────────
+
+describe("multi-provider", () => {
+  const alphaAction = defineAction({
+    type: "alphaAction",
+    resolve: (payload: { value: string }) => ({
+      echoed: payload.value,
+    }),
+  });
+
+  const betaAction = defineAction({
+    type: "betaAction",
+    resolve: (payload: { count: number }) => ({
+      doubled: payload.count * 2,
+    }),
+  });
+
+  it("two providers with disjoint actions — both resolve via resolveFormData", async () => {
+    function AlphaConsumer() {
+      const [submit, { data }] = useAction(alphaAction);
+      return (
+        <div>
+          <button onClick={() => submit({ value: "hello" })} data-testid="alpha-submit">
+            Alpha
+          </button>
+          {data && <span data-testid="alpha-data">{JSON.stringify(data)}</span>}
+        </div>
+      );
+    }
+
+    function BetaConsumer() {
+      const [submit, { data }] = useAction(betaAction);
+      return (
+        <div>
+          <button onClick={() => submit({ count: 5 })} data-testid="beta-submit">
+            Beta
+          </button>
+          {data && <span data-testid="beta-data">{JSON.stringify(data)}</span>}
+        </div>
+      );
+    }
+
+    const router = createMemoryRouter([
+      {
+        path: "/",
+        Component: () => (
+          <>
+            <ActionsProvider actions={[alphaAction]}>
+              <AlphaConsumer />
+            </ActionsProvider>
+            <ActionsProvider actions={[betaAction]}>
+              <BetaConsumer />
+            </ActionsProvider>
+          </>
+        ),
+        action: routeAction,
+      },
+    ]);
+
+    render(<RouterProvider router={router} />);
+
+    await act(async () => {
+      screen.getByTestId("alpha-submit").click();
+    });
+
+    await waitFor(() => {
+      const data = JSON.parse(screen.getByTestId("alpha-data").textContent!);
+      expect(data.success).toBe(true);
+      expect(data.response).toEqual({ echoed: "hello" });
+    });
+  });
+
+  it("duplicate action type across providers throws on mount", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const duplicateAction = defineAction({
+      type: "sharedType",
+      resolve: () => null,
+    });
+
+    const router = createMemoryRouter([
+      {
+        path: "/",
+        Component: () => (
+          <>
+            <ActionsProvider actions={[duplicateAction]}>
+              <div>Provider 1</div>
+            </ActionsProvider>
+            <ActionsProvider actions={[duplicateAction]}>
+              <div>Provider 2</div>
+            </ActionsProvider>
+          </>
+        ),
+        errorElement: <div data-testid="error-boundary">caught</div>,
+      },
+    ]);
+
+    render(<RouterProvider router={router} />);
+    expect(screen.getByTestId("error-boundary").textContent).toBe("caught");
+    spy.mockRestore();
+  });
+
+  it("unmounting a provider cleans up its types from the global registry", async () => {
+    const isolatedAction = defineAction({
+      type: "isolatedAction",
+      resolve: () => ({ ok: true }),
+    });
+
+    let showProvider = true;
+    let rerender: () => void;
+
+    function Wrapper() {
+      const [show, setShow] = React.useState(true);
+      rerender = () => setShow(false);
+      return show ? (
+        <ActionsProvider actions={[isolatedAction]}>
+          <div data-testid="mounted">yes</div>
+        </ActionsProvider>
+      ) : (
+        <div data-testid="unmounted">gone</div>
+      );
+    }
+
+    const React = await import("react");
+
+    const router = createMemoryRouter([
+      {
+        path: "/",
+        Component: Wrapper,
+      },
+    ]);
+
+    render(<RouterProvider router={router} />);
+    expect(screen.getByTestId("mounted")).toBeTruthy();
+
+    await act(async () => {
+      rerender!();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("unmounted")).toBeTruthy();
+    });
+
+    const formData = new FormData();
+    formData.set("actionType", "isolatedAction");
+    formData.set("payload", '{"json":"{}"}');
+    expect(() => resolveFormData(formData)).toThrow('Unknown action type "isolatedAction"');
   });
 });
