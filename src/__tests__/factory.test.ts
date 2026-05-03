@@ -1,51 +1,88 @@
 import { describe, it, expect } from "vitest";
 import { defineAction } from "../define-action";
 import { createActionsFactory } from "../factory";
-import { withMessageOverrides } from "../with-message-overrides";
+import { withMetaOverrides } from "../with-meta-overrides";
 
 // ─── Fixtures ────────────────────────────────────────────────────
 
-const createItem = defineAction({
+interface ToastMeta {
+  successMessage: string;
+  errorMessage: string;
+}
+
+const createItem = defineAction<
+  "createItem",
+  { title: string },
+  { id: string; title: string },
+  void,
+  ToastMeta
+>({
   type: "createItem",
-  resolve: (payload: { title: string }) => ({
+  resolve: (payload) => ({
     id: "123",
     title: payload.title,
   }),
-  successMessage: (p) => `Item "${p.title}" created`,
-  errorMessage: "Failed to create item",
+  meta: {
+    successMessage: "Item created",
+    errorMessage: "Failed to create item",
+  },
 });
 
-const deleteItem = defineAction({
+const deleteItem = defineAction<
+  "deleteItem",
+  { id: string },
+  { deleted: boolean },
+  void,
+  ToastMeta
+>({
   type: "deleteItem",
   method: "DELETE",
   resolve: (payload: { id: string }) => ({ deleted: true }),
-  successMessage: "Deleted",
-  errorMessage: (p) => `Failed to delete ${p.id}`,
+  meta: {
+    successMessage: "Deleted",
+    errorMessage: "Failed to delete",
+  },
 });
 
-const dynamicAction = defineAction({
+const dynamicAction = defineAction<
+  "dynamicAction",
+  { name: string },
+  { processed: boolean },
+  void,
+  ToastMeta
+>({
   type: "dynamicAction",
-  resolve: (payload: { name: string }) =>
-    withMessageOverrides(
+  resolve: (payload) =>
+    withMetaOverrides(
       { processed: true },
       { successMessage: `${payload.name} processed successfully` },
     ),
-  successMessage: "Default success",
-  errorMessage: "Default error",
+  meta: {
+    successMessage: "Default success",
+    errorMessage: "Default error",
+  },
 });
 
-const dynamicErrorAction = defineAction({
+const dynamicErrorAction = defineAction<
+  "dynamicErrorAction",
+  { name: string },
+  null,
+  void,
+  ToastMeta
+>({
   type: "dynamicErrorAction",
-  resolve: (payload: { name: string }) =>
-    withMessageOverrides(null, {
+  resolve: (payload) =>
+    withMetaOverrides(null, {
       errorMessage: `${payload.name} failed dynamically`,
     }),
-  successMessage: "Default success",
-  errorMessage: "Default error",
+  meta: {
+    successMessage: "Default success",
+    errorMessage: "Default error",
+  },
 });
 
-const noMessageAction = defineAction({
-  type: "noMessageAction",
+const noMetaAction = defineAction({
+  type: "noMetaAction",
   resolve: (payload: { x: number }) => payload.x * 2,
 });
 
@@ -54,7 +91,7 @@ const factory = createActionsFactory([
   deleteItem,
   dynamicAction,
   dynamicErrorAction,
-  noMessageAction,
+  noMetaAction,
 ]);
 
 // ─── createFormData / resolveFormData round-trip ─────────────────
@@ -128,26 +165,21 @@ describe("ActionObject from resolveFormData", () => {
     expect(result).toEqual({ id: "123", title: "Test" });
   });
 
-  it("resolves function-based successMessage with payload", async () => {
+  it("meta returns static meta from definition", () => {
     const { formData } = factory.createFormData("createItem", {
       title: "Widget",
     });
     const action = factory.resolveFormData(formData);
-    await action.resolve();
-    expect(action.successMessage).toBe('Item "Widget" created');
+    expect(action.meta).toEqual({
+      successMessage: "Item created",
+      errorMessage: "Failed to create item",
+    });
   });
 
-  it("resolves function-based errorMessage with payload", () => {
-    const { formData } = factory.createFormData("deleteItem", { id: "42" });
+  it("meta is undefined when definition omits it", () => {
+    const { formData } = factory.createFormData("noMetaAction", { x: 5 });
     const action = factory.resolveFormData(formData);
-    expect(action.errorMessage).toBe("Failed to delete 42");
-  });
-
-  it("returns undefined for optional messages", () => {
-    const { formData } = factory.createFormData("noMessageAction", { x: 5 });
-    const action = factory.resolveFormData(formData);
-    expect(action.successMessage).toBeUndefined();
-    expect(action.errorMessage).toBeUndefined();
+    expect(action.meta).toBeUndefined();
   });
 });
 
@@ -186,36 +218,45 @@ describe("invalid / missing input", () => {
   });
 });
 
-// ─── withMessageOverrides round-trip ─────────────────────────────
+// ─── withMetaOverrides round-trip ────────────────────────────────
 
-describe("withMessageOverrides through resolve", () => {
-  it("returns static default before resolve is called", () => {
+describe("withMetaOverrides through resolve", () => {
+  it("returns static meta before resolve is called", () => {
     const { formData } = factory.createFormData("dynamicAction", {
       name: "Test",
     });
     const action = factory.resolveFormData(formData);
-    expect(action.successMessage).toBe("Default success");
+    expect(action.meta).toEqual({
+      successMessage: "Default success",
+      errorMessage: "Default error",
+    });
   });
 
-  it("returns dynamic successMessage after resolve", async () => {
+  it("merges dynamic overrides into meta after resolve", async () => {
     const { formData } = factory.createFormData("dynamicAction", {
       name: "TestItem",
     });
     const action = factory.resolveFormData(formData);
     await action.resolve();
-    expect(action.successMessage).toBe("TestItem processed successfully");
+    expect(action.meta).toEqual({
+      successMessage: "TestItem processed successfully",
+      errorMessage: "Default error",
+    });
   });
 
-  it("returns dynamic errorMessage after resolve", async () => {
+  it("merges dynamic error overrides into meta after resolve", async () => {
     const { formData } = factory.createFormData("dynamicErrorAction", {
       name: "BadItem",
     });
     const action = factory.resolveFormData(formData);
     await action.resolve();
-    expect(action.errorMessage).toBe("BadItem failed dynamically");
+    expect(action.meta).toEqual({
+      successMessage: "Default success",
+      errorMessage: "BadItem failed dynamically",
+    });
   });
 
-  it("unwraps data from MessageOverrideResult", async () => {
+  it("unwraps data from MetaOverrideResult", async () => {
     const { formData } = factory.createFormData("dynamicAction", {
       name: "Test",
     });
@@ -224,12 +265,15 @@ describe("withMessageOverrides through resolve", () => {
     expect(result).toEqual({ processed: true });
   });
 
-  it("keeps static message when resolve returns raw data", async () => {
+  it("keeps static meta when resolve returns raw data", async () => {
     const { formData } = factory.createFormData("createItem", {
       title: "Widget",
     });
     const action = factory.resolveFormData(formData);
     await action.resolve();
-    expect(action.successMessage).toBe('Item "Widget" created');
+    expect(action.meta).toEqual({
+      successMessage: "Item created",
+      errorMessage: "Failed to create item",
+    });
   });
 });

@@ -23,7 +23,7 @@ Rename `with-message-overrides.ts` to `with-meta-overrides.ts` and generalize fr
 ### 2. Refactor action definition to use TMeta (AFK)
 Add the `TMeta` generic parameter and `meta` config key to `defineAction`, `ActionCreator`, and `ActionDefinition`. Remove `successMessage`, `errorMessage`, and `MessageFactory`.
 
-**Status:** in-progress
+**Status:** committed
 **Blocked by:** 1
 **Not this task:** `ActionObject` / `buildActionObject` changes (Task 3), factory changes (Task 4), adapter changes (Task 5), barrel export updates (Task 6)
 
@@ -43,7 +43,7 @@ Add the `TMeta` generic parameter and `meta` config key to `defineAction`, `Acti
 ### 3. Refactor ActionObject to use generic meta (AFK)
 Replace `successMessage`/`errorMessage` getters and `ActionObjectOptions` with a generic `meta` getter on `ActionObject`. Wire `buildActionObject` to use `isMetaOverride` for dynamic meta resolution.
 
-**Status:** pending
+**Status:** in-progress
 **Blocked by:** 1, 2
 **Not this task:** Factory `createFormData`/`resolveFormData` signature changes (Task 4), adapter/provider changes (Task 5), barrel export updates (Task 6)
 
