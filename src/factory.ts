@@ -5,7 +5,7 @@ import type {
   ActionDefinition,
   ActionMethod,
 } from "./define-action";
-import { buildActionObject, type ActionObject, type ActionObjectOptions } from "./action-object";
+import { buildActionObject, type ActionObject } from "./action-object";
 import { serialize, deserialize, type FileEntry } from "./serialization";
 
 export type { ActionObject } from "./action-object";
@@ -13,37 +13,35 @@ export type { ActionResult } from "./action-object";
 
 // ─── Factory return type ─────────────────────────────────────────
 
-export interface ActionsFactory<TContext = void> {
+export interface ActionsFactory<TContext = void, TMeta = void> {
   createFormData<TPayload>(
-    action: ActionCreator<string, TPayload, any, TContext>,
+    action: ActionCreator<string, TPayload, any, TContext, TMeta>,
     payload: TPayload,
-    options?: ActionObjectOptions,
   ): { formData: FormData; method: ActionMethod };
   createFormData(
     type: string,
     payload: unknown,
-    options?: ActionObjectOptions,
   ): { formData: FormData; method: ActionMethod };
-  resolveFormData(formData: FormData): ActionObject<TContext>;
+  resolveFormData(formData: FormData): ActionObject<TContext, TMeta>;
 }
 
 // ─── Factory ─────────────────────────────────────────────────────
 
-export function createActionsFactory<TContext = void>(
-  creators: ActionCreator<string, any, any, TContext>[],
-): ActionsFactory<TContext> {
+export function createActionsFactory<TContext = void, TMeta = void>(
+  creators: ActionCreator<string, any, any, TContext, TMeta>[],
+): ActionsFactory<TContext, TMeta> {
   const lookup = new Map<
     string,
-    ActionDefinition<string, any, any, TContext>
+    ActionDefinition<string, any, any, TContext, TMeta>
   >();
   for (const creator of creators) {
-    const def = (creator as any)._definition as ActionDefinition<string, any, any, TContext>;
+    const def = (creator as any)._definition as ActionDefinition<string, any, any, TContext, TMeta>;
     lookup.set(creator.type, def);
   }
 
   function getDef(
     type: string,
-  ): ActionDefinition<string, any, any, TContext> {
+  ): ActionDefinition<string, any, any, TContext, TMeta> {
     const def = lookup.get(type);
     if (!def) {
       throw new Error(
@@ -54,9 +52,8 @@ export function createActionsFactory<TContext = void>(
   }
 
   function createFormData(
-    typeOrCreator: string | ActionCreator<string, any, any, TContext>,
+    typeOrCreator: string | ActionCreator<string, any, any, TContext, TMeta>,
     payload: unknown,
-    options?: ActionObjectOptions,
   ): { formData: FormData; method: ActionMethod } {
     const type =
       typeof typeOrCreator === "string"
@@ -68,9 +65,6 @@ export function createActionsFactory<TContext = void>(
     const formData = new FormData();
     formData.set("actionType", type);
     formData.set("payload", encoded);
-    if (options) {
-      formData.set("options", JSON.stringify(options));
-    }
     for (const { path, file } of files) {
       formData.set(`file:${path}`, file);
     }
@@ -78,7 +72,7 @@ export function createActionsFactory<TContext = void>(
     return { formData, method: def.method };
   }
 
-  function resolveFormData(formData: FormData): ActionObject<TContext> {
+  function resolveFormData(formData: FormData): ActionObject<TContext, TMeta> {
     const actionType = formData.get("actionType");
     const encodedPayload = formData.get("payload");
 
@@ -102,12 +96,8 @@ export function createActionsFactory<TContext = void>(
 
     const payload = deserialize(encodedPayload, files);
 
-    const rawOptions = formData.get("options");
-    const options: ActionObjectOptions =
-      typeof rawOptions === "string" ? JSON.parse(rawOptions) : {};
-
-    return buildActionObject(def, payload, options) as ActionObject<TContext>;
+    return buildActionObject(def, payload) as ActionObject<TContext, TMeta>;
   }
 
-  return { createFormData, resolveFormData } as ActionsFactory<TContext>;
+  return { createFormData, resolveFormData } as ActionsFactory<TContext, TMeta>;
 }

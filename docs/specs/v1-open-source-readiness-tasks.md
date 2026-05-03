@@ -43,7 +43,7 @@ Add the `TMeta` generic parameter and `meta` config key to `defineAction`, `Acti
 ### 3. Refactor ActionObject to use generic meta (AFK)
 Replace `successMessage`/`errorMessage` getters and `ActionObjectOptions` with a generic `meta` getter on `ActionObject`. Wire `buildActionObject` to use `isMetaOverride` for dynamic meta resolution.
 
-**Status:** in-progress
+**Status:** committed
 **Blocked by:** 1, 2
 **Not this task:** Factory `createFormData`/`resolveFormData` signature changes (Task 4), adapter/provider changes (Task 5), barrel export updates (Task 6)
 
@@ -62,7 +62,7 @@ Replace `successMessage`/`errorMessage` getters and `ActionObjectOptions` with a
 ### 4. Thread TMeta through factory and remove options (AFK)
 Add the `TMeta` generic to `ActionsFactory` and `createActionsFactory`. Remove `ActionObjectOptions` from `createFormData` and the `options` FormData field from `resolveFormData`.
 
-**Status:** pending
+**Status:** in-progress
 **Blocked by:** 2, 3
 **Not this task:** Adapter/provider changes (Task 5), barrel export updates (Task 6)
 
