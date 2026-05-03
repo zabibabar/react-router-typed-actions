@@ -171,6 +171,47 @@ describe("useAction — integration", () => {
     expect(state).toHaveProperty("pendingPayload");
   });
 
+  it("submit function is referentially stable across re-renders", async () => {
+    const submitRefs: Function[] = [];
+
+    function Inspector() {
+      const [submit] = useAction(testAction);
+      submitRefs.push(submit);
+      return <span data-testid="count">{submitRefs.length}</span>;
+    }
+
+    let forceRender: () => void;
+
+    function Wrapper() {
+      const [, setState] = React.useState(0);
+      forceRender = () => setState((n) => n + 1);
+      return (
+        <ActionsProvider actions={actions}>
+          <Inspector />
+        </ActionsProvider>
+      );
+    }
+
+    const router = createMemoryRouter([
+      { path: "/", Component: Wrapper },
+    ]);
+
+    render(<RouterProvider router={router} />);
+
+    await act(async () => {
+      forceRender!();
+    });
+
+    await act(async () => {
+      forceRender!();
+    });
+
+    expect(submitRefs.length).toBeGreaterThanOrEqual(2);
+    for (let i = 1; i < submitRefs.length; i++) {
+      expect(submitRefs[i]).toBe(submitRefs[0]);
+    }
+  });
+
   it("state is 'idle' initially", () => {
     let capturedState: string | undefined;
 

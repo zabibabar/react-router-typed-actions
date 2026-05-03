@@ -80,14 +80,20 @@ export function ActionsProvider({
     [debug, onAction],
   );
 
-  const hasListeners = debug || onAction;
+  const hasListeners = debug || !!onAction;
+
+  const typeKey = useMemo(
+    () => actions.map((a) => a.type).sort().join("\0"),
+    [actions],
+  );
 
   useEffect(() => {
     const contributedTypes = registerActions(actions);
     return () => {
       unregisterActions(contributedTypes);
     };
-  }, [actions]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typeKey]);
 
   const contextValue = useMemo<ActionsContextValue>(
     () => ({ emitEvent: hasListeners ? emitEvent : null }),
@@ -137,27 +143,34 @@ export function useAction<
   const prevDataRef = useRef<ActionResult<TResult> | undefined>(undefined);
   const submitTimestampRef = useRef<number>(0);
 
-  const submit = (payload: TPayload) => {
+  const latestRef = useRef({ emitEvent, action, options });
+  latestRef.current = { emitEvent, action, options };
+
+  const submit = useCallback((payload: TPayload) => {
+    const { emitEvent: emit, action: act, options: opts } = latestRef.current;
     submitTimestampRef.current = Date.now();
-    emitEvent?.({
+    emit?.({
       phase: "submit",
-      type: action.type,
-      name: action.name,
+      type: act.type,
+      name: act.name,
       payload,
       timestamp: submitTimestampRef.current,
     });
 
-    const { formData, method } = createFormData(action.type, payload);
+    const { formData, method } = createFormData(act.type, payload);
     fetcher.submit(formData, {
       method,
-      ...(options?.action ? { action: options.action } : {}),
+      ...(opts?.action ? { action: opts.action } : {}),
     });
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     const data = fetcher.data;
     if (data === undefined || data === prevDataRef.current) return;
     prevDataRef.current = data;
+
+    const { emitEvent: emit, action: act, options: opts } = latestRef.current;
 
     const duration = submitTimestampRef.current
       ? Date.now() - submitTimestampRef.current
@@ -165,25 +178,25 @@ export function useAction<
     const timestamp = Date.now();
 
     if (data.success) {
-      emitEvent?.({
+      emit?.({
         phase: "success",
-        type: action.type,
-        name: action.name,
+        type: act.type,
+        name: act.name,
         result: data.response,
         duration,
         timestamp,
       });
-      options?.onSuccess?.(data.response);
+      opts?.onSuccess?.(data.response);
     } else {
-      emitEvent?.({
+      emit?.({
         phase: "error",
-        type: action.type,
-        name: action.name,
+        type: act.type,
+        name: act.name,
         error: data.error,
         duration,
         timestamp,
       });
-      options?.onError?.(data.error);
+      opts?.onError?.(data.error);
     }
   }, [fetcher.data]);
 
