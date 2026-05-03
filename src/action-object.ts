@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import type { ActionDefinition, ActionMethod, MessageFactory } from "./define-action";
-import { isMessageOverride } from "./with-message-overrides";
+import type { ActionDefinition, ActionMethod } from "./define-action";
+import { isMetaOverride } from "./with-meta-overrides";
+
+type MessageFactory<TPayload> = string | ((payload: TPayload) => string);
 
 // ─── ActionObject ─────────────────────────────────────────────────
 
@@ -12,7 +14,7 @@ export interface ActionObjectOptions {
   errorMessageOverride?: string;
 }
 
-export interface ActionObject<TContext = void> {
+export interface ActionObject<TContext = void, TMeta = void> {
   readonly type: string;
   readonly name: string;
   readonly method: ActionMethod;
@@ -43,11 +45,11 @@ export function resolveMessage(
 
 // ─── buildActionObject ───────────────────────────────────────────
 
-export function buildActionObject<TContext = void>(
-  def: ActionDefinition<string, any, any, TContext>,
+export function buildActionObject<TContext = void, TMeta = void>(
+  def: ActionDefinition<string, any, any, TContext, TMeta>,
   payload: unknown,
   options: ActionObjectOptions = {},
-): ActionObject<TContext> {
+): ActionObject<TContext, TMeta> {
   let dynamicSuccess: string | undefined;
   let dynamicError: string | undefined;
 
@@ -60,14 +62,14 @@ export function buildActionObject<TContext = void>(
     async resolve(context: TContext) {
       try {
         const raw = await def.resolve(payload, context);
-        if (isMessageOverride(raw)) {
+        if (isMetaOverride(raw)) {
           dynamicSuccess = raw.overrides.successMessage;
           dynamicError = raw.overrides.errorMessage;
           return raw.data;
         }
         return raw;
       } catch (error) {
-        if (isMessageOverride(error)) {
+        if (isMetaOverride(error)) {
           dynamicSuccess = error.overrides.successMessage;
           dynamicError = error.overrides.errorMessage;
           throw error.data;
@@ -87,5 +89,5 @@ export function buildActionObject<TContext = void>(
     },
   };
 
-  return obj as unknown as ActionObject<TContext>;
+  return obj as unknown as ActionObject<TContext, TMeta>;
 }

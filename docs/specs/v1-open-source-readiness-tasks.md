@@ -6,7 +6,7 @@
 ### 1. Generalize meta override mechanism (AFK)
 Rename `with-message-overrides.ts` to `with-meta-overrides.ts` and generalize from hardcoded `MessageOverrides` to `Partial<TMeta>`.
 
-**Status:** in-progress
+**Status:** committed
 **Blocked by:** None — can start immediately
 **Not this task:** `defineAction` changes (Task 2), `buildActionObject` changes (Task 3), factory/adapter changes (Tasks 4–5), test updates for other modules (Tasks 2–5)
 
@@ -23,7 +23,7 @@ Rename `with-message-overrides.ts` to `with-meta-overrides.ts` and generalize fr
 ### 2. Refactor action definition to use TMeta (AFK)
 Add the `TMeta` generic parameter and `meta` config key to `defineAction`, `ActionCreator`, and `ActionDefinition`. Remove `successMessage`, `errorMessage`, and `MessageFactory`.
 
-**Status:** pending
+**Status:** in-progress
 **Blocked by:** 1
 **Not this task:** `ActionObject` / `buildActionObject` changes (Task 3), factory changes (Task 4), adapter changes (Task 5), barrel export updates (Task 6)
 

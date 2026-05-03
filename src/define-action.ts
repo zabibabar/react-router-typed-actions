@@ -6,15 +6,12 @@ import { buildActionObject, type ActionObject } from "./action-object";
 
 export type ActionMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
-export type MessageFactory<TPayload> =
-  | string
-  | ((payload: TPayload) => string);
-
 export interface ActionDefinition<
   TType extends string = string,
   TPayload = unknown,
   TResult = unknown,
   TContext = void,
+  TMeta = void,
 > {
   readonly type: TType;
   readonly name: string;
@@ -23,8 +20,7 @@ export interface ActionDefinition<
     payload: TPayload,
     context: TContext,
   ) => TResult | Promise<TResult>;
-  readonly successMessage?: MessageFactory<TPayload>;
-  readonly errorMessage?: MessageFactory<TPayload>;
+  readonly meta: TMeta;
 }
 
 // ─── ActionCreator ────────────────────────────────────────────────
@@ -34,8 +30,9 @@ export type ActionCreator<
   TPayload = unknown,
   TResult = unknown,
   TContext = void,
+  TMeta = void,
 > = {
-  (payload: TPayload): ActionObject<TContext>;
+  (payload: TPayload): ActionObject<TContext, TMeta>;
   readonly type: TType;
   readonly name: string;
   readonly method: ActionMethod;
@@ -43,12 +40,13 @@ export type ActionCreator<
 
 // ─── defineAction ─────────────────────────────────────────────────
 
-export function defineAction<
+type DefineActionConfig<
   TType extends string,
   TPayload,
   TResult,
-  TContext = void,
->(config: {
+  TContext,
+  TMeta,
+> = {
   type: TType;
   name?: string;
   method?: ActionMethod;
@@ -56,24 +54,32 @@ export function defineAction<
     payload: TPayload,
     context: TContext,
   ) => TResult | Promise<TResult>;
-  successMessage?: MessageFactory<TPayload>;
-  errorMessage?: MessageFactory<TPayload>;
-}): ActionCreator<TType, TPayload, TResult, TContext> {
-  const definition: ActionDefinition<TType, TPayload, TResult, TContext> = {
+} & ([TMeta] extends [void] ? { meta?: never } : { meta: TMeta });
+
+export function defineAction<
+  TType extends string,
+  TPayload,
+  TResult,
+  TContext = void,
+  TMeta = void,
+>(
+  config: DefineActionConfig<TType, TPayload, TResult, TContext, TMeta>,
+): ActionCreator<TType, TPayload, TResult, TContext, TMeta> {
+  const definition: ActionDefinition<TType, TPayload, TResult, TContext, TMeta> = {
     type: config.type,
     name: config.name ?? config.type,
     method: config.method ?? "POST",
     resolve: config.resolve,
-    successMessage: config.successMessage,
-    errorMessage: config.errorMessage,
+    meta: (config as any).meta as TMeta,
   };
 
   const creator = ((payload: TPayload) =>
-    buildActionObject(definition as ActionDefinition<string, any, any, TContext>, payload)) as ActionCreator<
+    buildActionObject(definition as ActionDefinition<string, any, any, TContext, TMeta>, payload)) as ActionCreator<
     TType,
     TPayload,
     TResult,
-    TContext
+    TContext,
+    TMeta
   >;
 
   Object.defineProperty(creator, "name", {
@@ -89,4 +95,3 @@ export function defineAction<
 
   return creator;
 }
-

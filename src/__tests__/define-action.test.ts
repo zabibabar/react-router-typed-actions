@@ -4,22 +4,33 @@ import type { ActionObject } from "../action-object";
 
 // ─── Fixtures ────────────────────────────────────────────────────
 
-const createItem = defineAction({
+interface ItemMeta {
+  successMessage: string;
+  errorMessage: string;
+}
+
+const createItem = defineAction<
+  "createItem",
+  { title: string },
+  { id: string; title: string },
+  void,
+  ItemMeta
+>({
   type: "createItem",
-  resolve: (payload: { title: string }) => ({
+  resolve: (payload) => ({
     id: "123",
     title: payload.title,
   }),
-  successMessage: (payload) => `Item "${payload.title}" created`,
-  errorMessage: "Failed to create item",
+  meta: {
+    successMessage: "Item created",
+    errorMessage: "Failed to create item",
+  },
 });
 
 const deleteItem = defineAction({
   type: "deleteItem",
   method: "DELETE",
   resolve: (payload: { id: string }) => ({ deleted: true }),
-  successMessage: "Item deleted",
-  errorMessage: (payload) => `Failed to delete item ${payload.id}`,
 });
 
 const contextAction = defineAction({
@@ -44,7 +55,7 @@ describe("defineAction", () => {
     expect(createItem.name).toBe("createItem");
   });
 
-  it("defaults method to 'post'", () => {
+  it("defaults method to 'POST'", () => {
     expect(minimalAction.method).toBe("POST");
   });
 
@@ -90,21 +101,17 @@ describe("ActionCreator callable", () => {
     expect(result).toEqual({ name: "test", token: "abc" });
   });
 
-  it("successMessage resolves from definition after resolve", async () => {
-    const action = createItem({ title: "Widget" });
-    await action.resolve();
-    expect(action.successMessage).toBe('Item "Widget" created');
+  it("stores meta on the internal _definition", () => {
+    const def = (createItem as any)._definition;
+    expect(def.meta).toEqual({
+      successMessage: "Item created",
+      errorMessage: "Failed to create item",
+    });
   });
 
-  it("errorMessage resolves from definition", () => {
-    const action = deleteItem({ id: "42" });
-    expect(action.errorMessage).toBe("Failed to delete item 42");
-  });
-
-  it("messages are undefined when definition omits them", () => {
-    const action = minimalAction({ x: 5 });
-    expect(action.successMessage).toBeUndefined();
-    expect(action.errorMessage).toBeUndefined();
+  it("_definition.meta is undefined when not provided", () => {
+    const def = (minimalAction as any)._definition;
+    expect(def.meta).toBeUndefined();
   });
 });
 
@@ -118,18 +125,18 @@ describe("type inference", () => {
 
   it("ActionCreator is assignable to its type", () => {
     expectTypeOf(createItem).toMatchTypeOf<
-      ActionCreator<"createItem", { title: string }>
+      ActionCreator<"createItem", { title: string }, { id: string; title: string }, void, ItemMeta>
     >();
   });
 
-  it("calling the creator returns ActionObject<void> for void context", () => {
+  it("calling the creator returns ActionObject<void, ItemMeta> for typed meta", () => {
     const action = createItem({ title: "x" });
-    expectTypeOf(action).toMatchTypeOf<ActionObject<void>>();
+    expectTypeOf(action).toMatchTypeOf<ActionObject<void, ItemMeta>>();
   });
 
-  it("calling the creator returns ActionObject<TContext> for typed context", () => {
+  it("calling the creator returns ActionObject<TContext, void> for typed context", () => {
     const action = contextAction({ name: "x" });
-    expectTypeOf(action).toMatchTypeOf<ActionObject<{ token: string }>>();
+    expectTypeOf(action).toMatchTypeOf<ActionObject<{ token: string }, void>>();
   });
 
   it("resolve on void-context ActionObject takes no args", () => {
@@ -142,5 +149,10 @@ describe("type inference", () => {
     expectTypeOf(action.resolve).toEqualTypeOf<
       (context: { token: string }) => Promise<unknown>
     >();
+  });
+
+  it("TMeta defaults to void when meta config is omitted", () => {
+    const action = minimalAction({ x: 1 });
+    expectTypeOf(action).toMatchTypeOf<ActionObject<void, void>>();
   });
 });
