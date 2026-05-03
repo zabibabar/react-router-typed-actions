@@ -5,20 +5,25 @@ export type {
   ActionCreator,
   ActionDefinition,
   ActionMethod,
-  MessageFactory,
 } from "./define-action";
 
-// ─── Message Overrides ───────────────────────────────────────────
+// ─── Meta Overrides ──────────────────────────────────────────────
 
-export { withMessageOverrides } from "./with-message-overrides";
+export { withMetaOverrides, isMetaOverride } from "./with-meta-overrides";
+export type { MetaOverrideResult } from "./with-meta-overrides";
 
 // ─── Factory ─────────────────────────────────────────────────────
 
 export { createActionsFactory } from "./factory";
 export type { ActionsFactory } from "./factory";
-export type { ActionObject, ActionObjectOptions, ActionResult } from "./action-object";
+export type { ActionObject, ActionResult } from "./action-object";
 
 // ─── React Router Adapter ────────────────────────────────────────
 
 export { ActionsProvider, useAction, resolveFormData } from "./adapter";
-export type { ActionEvent, ActionEventHandler } from "./adapter";
+export type {
+  ActionEvent,
+  ActionEventHandler,
+  UseActionOptions,
+  UseActionState,
+} from "./adapter";

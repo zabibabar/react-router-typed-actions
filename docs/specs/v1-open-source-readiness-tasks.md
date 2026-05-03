@@ -80,7 +80,7 @@ Add the `TMeta` generic to `ActionsFactory` and `createActionsFactory`. Remove `
 ### 5. Multi-provider architecture and useAction state alignment (AFK)
 Replace the singleton `_factory` with a global additive registry and scoped React context. Replace `pending: boolean` with `state: "idle" | "submitting" | "loading"` on `useAction`. Remove `ActionObjectOptions` serialization from `submit`.
 
-**Status:** in-progress
+**Status:** committed
 **Blocked by:** 2, 3, 4
 **Not this task:** Barrel export updates (Task 6)
 
@@ -110,7 +110,7 @@ Replace the singleton `_factory` with a global additive registry and scoped Reac
 ### 6. Update barrel exports and delete dead code (AFK)
 Update `index.ts` to export the new names and remove deleted exports. Delete the old `with-message-overrides.ts` file if not already removed.
 
-**Status:** pending
+**Status:** in-progress
 **Blocked by:** 1, 2, 3, 4, 5
 **Not this task:** README rewrite (out of scope per spec), consumer app migration (out of scope per spec)
 
