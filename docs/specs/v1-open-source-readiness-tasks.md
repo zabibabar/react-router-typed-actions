@@ -1,7 +1,7 @@
 # v1 Open-Source Readiness Refactor — Tasks
 
 > Spec: [v1 Open-Source Readiness Refactor](./v1-open-source-readiness.md)
-> **Feature status:** in-progress
+> **Feature status:** committed
 
 ### 1. Generalize meta override mechanism (AFK)
 Rename `with-message-overrides.ts` to `with-meta-overrides.ts` and generalize from hardcoded `MessageOverrides` to `Partial<TMeta>`.
@@ -110,7 +110,7 @@ Replace the singleton `_factory` with a global additive registry and scoped Reac
 ### 6. Update barrel exports and delete dead code (AFK)
 Update `index.ts` to export the new names and remove deleted exports. Delete the old `with-message-overrides.ts` file if not already removed.
 
-**Status:** in-progress
+**Status:** committed
 **Blocked by:** 1, 2, 3, 4, 5
 **Not this task:** README rewrite (out of scope per spec), consumer app migration (out of scope per spec)
 
