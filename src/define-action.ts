@@ -36,7 +36,10 @@ export type ActionCreator<
   TContext = void,
 > = {
   (payload: TPayload): ActionObject<TContext>;
-} & ActionDefinition<TType, TPayload, TResult, TContext>;
+  readonly type: TType;
+  readonly name: string;
+  readonly method: ActionMethod;
+};
 
 // ─── defineAction ─────────────────────────────────────────────────
 
@@ -81,9 +84,7 @@ export function defineAction<
   Object.assign(creator, {
     type: definition.type,
     method: definition.method,
-    resolve: definition.resolve,
-    successMessage: definition.successMessage,
-    errorMessage: definition.errorMessage,
+    _definition: definition,
   });
 
   return creator;

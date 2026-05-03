@@ -38,13 +38,10 @@ const minimalAction = defineAction({
 // ─── defineAction returns ActionCreator ──────────────────────────
 
 describe("defineAction", () => {
-  it("returns an ActionCreator with definition properties", () => {
+  it("returns an ActionCreator with identity properties", () => {
     expect(createItem.type).toBe("createItem");
     expect(createItem.method).toBe("POST");
     expect(createItem.name).toBe("createItem");
-    expect(typeof createItem.resolve).toBe("function");
-    expect(typeof createItem.successMessage).toBe("function");
-    expect(createItem.errorMessage).toBe("Failed to create item");
   });
 
   it("defaults method to 'post'", () => {
@@ -65,12 +62,7 @@ describe("defineAction", () => {
   });
 
   it("uses explicit method when provided", () => {
-    expect(deleteItem.method).toBe("delete");
-  });
-
-  it("leaves successMessage/errorMessage undefined when omitted", () => {
-    expect(minimalAction.successMessage).toBeUndefined();
-    expect(minimalAction.errorMessage).toBeUndefined();
+    expect(deleteItem.method).toBe("DELETE");
   });
 });
 

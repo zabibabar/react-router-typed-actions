@@ -11,7 +11,6 @@ import {
   type ReactElement,
 } from "react";
 import { useFetcher } from "react-router";
-import type { ActionDefinition } from "./define-action";
 import type { ActionCreator } from "./define-action";
 import { createActionsFactory } from "./factory";
 import type { ActionObject, ActionResult } from "./action-object";
@@ -80,7 +79,7 @@ const ActionsContext = createContext<ActionsContextValue | null>(null);
 // ─── ActionsProvider ─────────────────────────────────────────────
 
 export interface ActionsProviderProps {
-  actions: ActionDefinition<string, any, any, any>[];
+  actions: ActionCreator<string, any, any, any>[];
   debug?: boolean;
   onAction?: ActionEventHandler;
   children: ReactNode;

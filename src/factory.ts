@@ -30,14 +30,15 @@ export interface ActionsFactory<TContext = void> {
 // ─── Factory ─────────────────────────────────────────────────────
 
 export function createActionsFactory<TContext = void>(
-  definitions: ActionDefinition<string, any, any, TContext>[],
+  creators: ActionCreator<string, any, any, TContext>[],
 ): ActionsFactory<TContext> {
   const lookup = new Map<
     string,
     ActionDefinition<string, any, any, TContext>
   >();
-  for (const def of definitions) {
-    lookup.set(def.type, def);
+  for (const creator of creators) {
+    const def = (creator as any)._definition as ActionDefinition<string, any, any, TContext>;
+    lookup.set(creator.type, def);
   }
 
   function getDef(
