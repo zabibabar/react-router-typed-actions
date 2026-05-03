@@ -45,6 +45,16 @@ export type ActionCreator<
   readonly method: ActionMethod;
 };
 
+// ─── Definition store (private) ───────────────────────────────────
+
+const definitionStore = new WeakMap<Function, ActionDefinition>();
+
+export function getDefinitionFor(
+  creator: ActionCreator<string, any, any, any, any>,
+): ActionDefinition | undefined {
+  return definitionStore.get(creator);
+}
+
 // ─── defineAction ─────────────────────────────────────────────────
 
 type DefineActionConfig<
@@ -97,8 +107,9 @@ export function defineAction<
   Object.assign(creator, {
     type: definition.type,
     method: definition.method,
-    _definition: definition,
   });
+
+  definitionStore.set(creator, definition);
 
   return creator;
 }

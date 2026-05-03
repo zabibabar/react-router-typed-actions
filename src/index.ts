@@ -1,6 +1,6 @@
 // ─── Core ────────────────────────────────────────────────────────
 
-export { defineAction } from "./define-action";
+export { defineAction, getDefinitionFor } from "./define-action";
 export type {
   ActionCreator,
   ActionDefinition,

@@ -1,5 +1,5 @@
 import { describe, it, expect, expectTypeOf } from "vitest";
-import { defineAction, type ActionCreator } from "../define-action";
+import { defineAction, getDefinitionFor, type ActionCreator } from "../define-action";
 import type { ActionObject } from "../action-object";
 
 // ─── Fixtures ────────────────────────────────────────────────────
@@ -101,17 +101,22 @@ describe("ActionCreator callable", () => {
     expect(result).toEqual({ name: "test", token: "abc" });
   });
 
-  it("stores meta on the internal _definition", () => {
-    const def = (createItem as any)._definition;
-    expect(def.meta).toEqual({
+  it("stores meta accessible via getDefinitionFor", () => {
+    const def = getDefinitionFor(createItem);
+    expect(def?.meta).toEqual({
       successMessage: "Item created",
       errorMessage: "Failed to create item",
     });
   });
 
-  it("_definition.meta is undefined when not provided", () => {
-    const def = (minimalAction as any)._definition;
-    expect(def.meta).toBeUndefined();
+  it("definition meta is undefined when not provided", () => {
+    const def = getDefinitionFor(minimalAction);
+    expect(def?.meta).toBeUndefined();
+  });
+
+  it("getDefinitionFor returns undefined for a plain function", () => {
+    const plainFn = (() => {}) as unknown as ActionCreator;
+    expect(getDefinitionFor(plainFn)).toBeUndefined();
   });
 });
 
