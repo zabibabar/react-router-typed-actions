@@ -52,24 +52,10 @@ describe("defineAction", () => {
   it("returns an Action with identity properties", () => {
     expect(createItem.type).toBe("createItem");
     expect(createItem.method).toBe("POST");
-    expect(createItem.name).toBe("createItem");
   });
 
   it("defaults method to 'POST'", () => {
     expect(minimalAction.method).toBe("POST");
-  });
-
-  it("defaults name to type", () => {
-    expect(minimalAction.name).toBe("minimal");
-  });
-
-  it("uses explicit name when provided", () => {
-    const action = defineAction({
-      type: "custom",
-      name: "[Campaign] Create Campaign",
-      resolve: () => null,
-    });
-    expect(action.name).toBe("[Campaign] Create Campaign");
   });
 
   it("uses explicit method when provided", () => {
@@ -83,7 +69,6 @@ describe("Action callable", () => {
   it("produces an ActionObject with correct shape", () => {
     const action = createItem({ title: "Widget" });
     expect(action.type).toBe("createItem");
-    expect(action.name).toBe("createItem");
     expect(action.method).toBe("POST");
     expect(action.payload).toEqual({ title: "Widget" });
     expect(typeof action.resolve).toBe("function");
@@ -102,8 +87,8 @@ describe("Action callable", () => {
   });
 
   it("stores meta accessible via getDefinitionFor", () => {
-    const def = getDefinitionFor(createItem);
-    expect(def?.meta).toEqual({
+    const def = getDefinitionFor(createItem)!;
+    expect(def.meta).toEqual({
       successMessage: "Item created",
       errorMessage: "Failed to create item",
     });

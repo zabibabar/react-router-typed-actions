@@ -19,7 +19,6 @@ export interface ActionDefinition<
   TMeta = void,
 > {
   readonly type: TType;
-  readonly name: string;
   readonly method: ActionMethod;
   readonly resolve: (
     payload: TPayload,
@@ -39,7 +38,6 @@ export type Action<
 > = {
   (payload: TPayload): ActionObject<TResult, TContext, TMeta>;
   readonly type: TType;
-  readonly name: string;
   readonly method: ActionMethod;
 };
 
@@ -65,7 +63,6 @@ type DefineActionConfig<
   TMeta,
 > = {
   type: TType;
-  name?: string;
   method?: ActionMethod;
   resolve: (
     payload: TPayload,
@@ -84,7 +81,6 @@ export function defineAction<
 ): Action<TType, TPayload, TResult, TContext, TMeta> {
   const definition: ActionDefinition<TType, TPayload, TResult, TContext, TMeta> = {
     type: config.type,
-    name: config.name ?? config.type,
     method: config.method ?? "POST",
     resolve: config.resolve,
     meta: (config as { meta?: TMeta }).meta as TMeta,
@@ -99,11 +95,6 @@ export function defineAction<
     TContext,
     TMeta
   >;
-
-  Object.defineProperty(creator, "name", {
-    value: definition.name,
-    configurable: true,
-  });
 
   Object.assign(creator, {
     type: definition.type,

@@ -5,7 +5,6 @@ import { isMetaOverride } from "./with-meta-overrides";
 
 export interface ActionObject<TResult = unknown, TContext = void, TMeta = void> {
   readonly type: string;
-  readonly name: string;
   readonly method: ActionMethod;
   readonly payload: unknown;
   readonly meta: TMeta;
@@ -46,7 +45,6 @@ export function buildActionObject<TResult = unknown, TContext = void, TMeta = vo
 
   const obj = {
     type: def.type,
-    name: def.name,
     method: def.method,
     payload,
     async resolve(context: TContext) {

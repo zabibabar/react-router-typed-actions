@@ -130,7 +130,6 @@ describe("createFormData / resolveFormData round-trip", () => {
 
     const action = resolveFormData(formData);
     expect(action.type).toBe("createItem");
-    expect(action.name).toBe("createItem");
     expect(action.method).toBe("POST");
     expect(action.payload).toEqual({ title: "Widget" });
   });
@@ -185,7 +184,6 @@ describe("ActionObject from resolveFormData", () => {
     });
     const action = resolveFormData(formData);
     expect(action.type).toBe("createItem");
-    expect(action.name).toBe("createItem");
     expect(action.method).toBe("POST");
     expect(action.payload).toEqual({ title: "Hello" });
     expect(typeof action.resolve).toBe("function");
