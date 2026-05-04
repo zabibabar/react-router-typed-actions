@@ -11,13 +11,21 @@ export interface UseActionOptions<TResult> {
   onError?: (error: unknown) => void;
 }
 
-export interface UseActionState<TType extends string, TPayload, TResult, TContext, TMeta> {
+export interface UseActionState<
+  TType extends string,
+  TPayload,
+  TResult,
+  TContext,
+  TMeta,
+> {
   state: "idle" | "submitting" | "loading";
-  data: ActionResult<Action<TType, TPayload, TResult, TContext, TMeta>> | undefined;
+  data:
+    | ActionResult<Action<TType, TPayload, TResult, TContext, TMeta>>
+    | undefined;
   pendingPayload: TPayload | undefined;
 }
 
-export function useAction<
+export function useSubmitAction<
   TType extends string,
   TPayload,
   TResult,

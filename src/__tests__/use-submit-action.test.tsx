@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, act, waitFor, cleanup } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { defineAction } from "../define-action";
-import { useAction } from "../adapter";
+import { useSubmitAction } from "../use-submit-action";
 import { resolveFormData } from "../form-data";
 import { registerActions, _resetRegistryForTesting } from "../registry";
 import { actionSuccess, actionFailure } from "../action-object";
@@ -88,7 +88,7 @@ function TestHookConsumer({
   onSuccess?: (result: { greeting: string }) => void;
   onError?: (error: unknown) => void;
 }) {
-  const [submit, { state, data }] = useAction(testAction, {
+  const [submit, { state, data }] = useSubmitAction(testAction, {
     onSuccess,
     onError,
   });
@@ -105,7 +105,7 @@ function TestHookConsumer({
 }
 
 function FailHookConsumer({ onError }: { onError?: (error: unknown) => void }) {
-  const [submit, { data }] = useAction(failAction, { onError });
+  const [submit, { data }] = useSubmitAction(failAction, { onError });
 
   return (
     <div>
@@ -120,15 +120,15 @@ function FailHookConsumer({ onError }: { onError?: (error: unknown) => void }) {
   );
 }
 
-// ─── useAction — no provider needed ─────────────────────────────
+// ─── useSubmitAction — no provider needed ─────────────────────────────
 
-describe("useAction — standalone (no provider)", () => {
+describe("useSubmitAction — standalone (no provider)", () => {
   it("does not throw when used without a provider", () => {
     const router = createMemoryRouter([
       {
         path: "/",
         Component: () => {
-          useAction(testAction);
+          useSubmitAction(testAction);
           return <span data-testid="ok">ok</span>;
         },
       },
@@ -141,12 +141,12 @@ describe("useAction — standalone (no provider)", () => {
 
 // ─── Integration tests ──────────────────────────────────────────
 
-describe("useAction — integration", () => {
+describe("useSubmitAction — integration", () => {
   it("returns a tuple of [submit, state]", () => {
     let tupleResult: unknown;
 
     function Inspector() {
-      const result = useAction(testAction);
+      const result = useSubmitAction(testAction);
       tupleResult = result;
       return null;
     }
@@ -171,7 +171,7 @@ describe("useAction — integration", () => {
     const submitRefs: Function[] = [];
 
     function Inspector() {
-      const [submit] = useAction(testAction);
+      const [submit] = useSubmitAction(testAction);
       submitRefs.push(submit);
       return <span data-testid="count">{submitRefs.length}</span>;
     }
@@ -184,9 +184,7 @@ describe("useAction — integration", () => {
       return <Inspector />;
     }
 
-    const router = createMemoryRouter([
-      { path: "/", Component: Wrapper },
-    ]);
+    const router = createMemoryRouter([{ path: "/", Component: Wrapper }]);
 
     render(<RouterProvider router={router} />);
 
@@ -208,7 +206,7 @@ describe("useAction — integration", () => {
     let capturedState: string | undefined;
 
     function Inspector() {
-      const [, { state }] = useAction(testAction);
+      const [, { state }] = useSubmitAction(testAction);
       capturedState = state;
       return null;
     }
@@ -325,7 +323,7 @@ describe("pendingPayload", () => {
     let capturedPending: unknown;
 
     function Inspector() {
-      const [, { pendingPayload }] = useAction(testAction);
+      const [, { pendingPayload }] = useSubmitAction(testAction);
       capturedPending = pendingPayload;
       return null;
     }
@@ -345,11 +343,14 @@ describe("pendingPayload", () => {
     const pendingSnapshots: unknown[] = [];
 
     function Inspector() {
-      const [submit, { pendingPayload, data }] = useAction(testAction);
+      const [submit, { pendingPayload, data }] = useSubmitAction(testAction);
       pendingSnapshots.push(pendingPayload);
       return (
         <div>
-          <button onClick={() => submit({ name: "Pending" })} data-testid="submit">
+          <button
+            onClick={() => submit({ name: "Pending" })}
+            data-testid="submit"
+          >
             Submit
           </button>
           {data && <span data-testid="done">done</span>}
@@ -387,10 +388,10 @@ describe("pendingPayload", () => {
 
 // ─── submit with meta overrides ─────────────────────────────────
 
-describe("useAction — meta overrides on submit", () => {
+describe("useSubmitAction — meta overrides on submit", () => {
   it("passes submit-time meta overrides through to the route action", async () => {
     function MetaConsumer() {
-      const [submit, { data }] = useAction(metaAction);
+      const [submit, { data }] = useSubmitAction(metaAction);
       return (
         <div>
           <button
@@ -434,7 +435,7 @@ describe("useAction — meta overrides on submit", () => {
 
   it("preserves static meta when no overrides are provided", async () => {
     function MetaConsumer() {
-      const [submit, { data }] = useAction(metaAction);
+      const [submit, { data }] = useSubmitAction(metaAction);
       return (
         <div>
           <button
@@ -475,12 +476,12 @@ describe("useAction — meta overrides on submit", () => {
 
 // ─── concurrent / rapid submissions ─────────────────────────────
 
-describe("useAction — concurrent submissions", () => {
+describe("useSubmitAction — concurrent submissions", () => {
   it("only the final submission triggers onSuccess", async () => {
     const onSuccess = vi.fn();
 
     function RapidConsumer() {
-      const [submit, { data }] = useAction(testAction, { onSuccess });
+      const [submit, { data }] = useSubmitAction(testAction, { onSuccess });
       return (
         <div>
           <button
@@ -523,7 +524,7 @@ describe("useAction — concurrent submissions", () => {
     const pendingSnapshots: unknown[] = [];
 
     function RapidConsumer() {
-      const [submit, { pendingPayload, data }] = useAction(testAction);
+      const [submit, { pendingPayload, data }] = useSubmitAction(testAction);
       pendingSnapshots.push(pendingPayload);
       return (
         <div>

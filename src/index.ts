@@ -23,7 +23,12 @@ export type { MetaOverrideResult } from "./with-meta-overrides";
 // ─── Action Object & Result ─────────────────────────────────────
 
 export { actionSuccess, actionFailure } from "./action-object";
-export type { ActionObject, ActionResult, ActionSuccess, ActionFailure } from "./action-object";
+export type {
+  ActionObject,
+  ActionResult,
+  ActionSuccess,
+  ActionFailure,
+} from "./action-object";
 
 // ─── FormData ───────────────────────────────────────────────────
 
@@ -31,5 +36,5 @@ export { createFormData, resolveFormData } from "./form-data";
 
 // ─── React Router Adapter ────────────────────────────────────────
 
-export { useAction } from "./adapter";
-export type { UseActionOptions, UseActionState } from "./adapter";
+export { useAction } from "./use-submit-action";
+export type { UseActionOptions, UseActionState } from "./use-submit-action";
