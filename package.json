@@ -1,7 +1,7 @@
 {
-  "name": "react-router-actions",
+  "name": "react-router-typed-actions",
   "version": "0.1.0",
-  "description": "A type-safe action system for handling client-side form submissions and API calls in React Router.",
+  "description": "Type-safe, serializable actions for React Router.",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -32,11 +32,17 @@
     "react-router",
     "actions",
     "type-safe",
-    "form-data",
-    "client-actions"
+    "typed-actions",
+    "form-data"
   ],
-  "author": "",
-  "license": "ISC",
+  "author": "Zabi Babar (https://github.com/zabibabar)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zabibabar/react-router-typed-actions.git"
+  },
+  "homepage": "https://github.com/zabibabar/react-router-typed-actions#readme",
+  "bugs": "https://github.com/zabibabar/react-router-typed-actions/issues",
   "peerDependencies": {
     "react": ">=18.0.0",
     "react-router": ">=7.0.0"
