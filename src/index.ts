@@ -1,11 +1,19 @@
 // ─── Core ────────────────────────────────────────────────────────
 
-export { defineAction, getDefinitionFor } from "./define-action";
+import type { Action } from "./define-action";
+
+export { defineAction } from "./define-action";
 export type { Action, ActionDefinition, ActionMethod } from "./define-action";
+
+/** Extract the resolved return type from an action creator. */
+export type ActionResultOf<T> =
+  T extends Action<any, any, infer TResult, any, any>
+    ? Awaited<TResult>
+    : never;
 
 // ─── Registry ───────────────────────────────────────────────────
 
-export { registerSlice } from "./registry";
+export { registerActions } from "./registry";
 
 // ─── Meta Overrides ──────────────────────────────────────────────
 
@@ -15,7 +23,7 @@ export type { MetaOverrideResult } from "./with-meta-overrides";
 // ─── Action Object & Result ─────────────────────────────────────
 
 export { actionSuccess, actionFailure } from "./action-object";
-export type { ActionObject, ActionResult } from "./action-object";
+export type { ActionObject, ActionResult, ActionSuccess, ActionFailure } from "./action-object";
 
 // ─── FormData ───────────────────────────────────────────────────
 

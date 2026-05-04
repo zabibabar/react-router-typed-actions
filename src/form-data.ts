@@ -1,17 +1,18 @@
-import type { ActionMethod } from "./define-action";
+import type { Action, ActionMethod } from "./define-action";
 import { buildActionObject, type ActionObject } from "./action-object";
 import { serialize, deserialize, type FileEntry } from "./serialization";
 import { getDefinition } from "./registry";
 
 export function createFormData(
-  creator: { readonly type: string; readonly method: ActionMethod },
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- existential erasure: accepts any Action regardless of generic params
+  action: Action<string, any, any, any, any>,
   payload: unknown,
   metaOverrides?: Record<string, unknown>,
 ): { formData: FormData; method: ActionMethod } {
   const { encoded, files } = serialize(payload);
 
   const formData = new FormData();
-  formData.set("actionType", creator.type);
+  formData.set("actionType", action.type);
   formData.set("payload", encoded);
   for (const { path, file } of files) {
     formData.set(`file:${path}`, file);
@@ -22,7 +23,7 @@ export function createFormData(
     formData.set("metaOverrides", metaEncoded);
   }
 
-  return { formData, method: creator.method };
+  return { formData, method: action.method };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- TContext=any for bivariant resolve(); TMeta=any because definition type is unknown at deserialization

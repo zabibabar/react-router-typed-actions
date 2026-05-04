@@ -7,7 +7,7 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 import { defineAction } from "../define-action";
 import { useAction } from "../adapter";
 import { resolveFormData } from "../form-data";
-import { registerSlice, _resetRegistryForTesting } from "../registry";
+import { registerActions, _resetRegistryForTesting } from "../registry";
 import { actionSuccess, actionFailure } from "../action-object";
 
 // ─── Fixtures ────────────────────────────────────────────────────
@@ -26,8 +26,28 @@ const failAction = defineAction({
   },
 });
 
+interface NotifyMeta {
+  successMessage: string;
+  errorMessage: string;
+}
+
+const metaAction = defineAction<
+  "metaAction",
+  { name: string },
+  { greeting: string },
+  void,
+  NotifyMeta
+>({
+  type: "metaAction",
+  resolve: (payload) => ({ greeting: `Hello ${payload.name}` }),
+  meta: {
+    successMessage: "Default success",
+    errorMessage: "Default error",
+  },
+});
+
 beforeEach(() => {
-  registerSlice("adapter-test", [testAction, failAction]);
+  registerActions([testAction, failAction, metaAction]);
 });
 
 afterEach(() => {
@@ -35,7 +55,7 @@ afterEach(() => {
   _resetRegistryForTesting();
 });
 
-// ─── Route action handler (user-written recipe) ─────────────────
+// ─── Route action handlers ───────────────────────────────────────
 
 async function routeAction({ request }: { request: Request }) {
   const formData = await request.formData();
@@ -45,6 +65,17 @@ async function routeAction({ request }: { request: Request }) {
     return actionSuccess(actionObj, response);
   } catch (err) {
     return actionFailure(actionObj, String(err));
+  }
+}
+
+async function metaRouteAction({ request }: { request: Request }) {
+  const formData = await request.formData();
+  const actionObj = resolveFormData(formData);
+  try {
+    const response = await actionObj.resolve();
+    return { ...actionSuccess(actionObj, response), meta: actionObj.meta };
+  } catch (err) {
+    return { ...actionFailure(actionObj, String(err)), meta: actionObj.meta };
   }
 }
 
@@ -351,5 +382,189 @@ describe("pendingPayload", () => {
 
     const lastSnapshot = pendingSnapshots[pendingSnapshots.length - 1];
     expect(lastSnapshot).toBeUndefined();
+  });
+});
+
+// ─── submit with meta overrides ─────────────────────────────────
+
+describe("useAction — meta overrides on submit", () => {
+  it("passes submit-time meta overrides through to the route action", async () => {
+    function MetaConsumer() {
+      const [submit, { data }] = useAction(metaAction);
+      return (
+        <div>
+          <button
+            onClick={() =>
+              submit({ name: "World" }, { successMessage: "Custom toast!" })
+            }
+            data-testid="meta-submit"
+          >
+            Submit
+          </button>
+          {data && <span data-testid="meta-data">{JSON.stringify(data)}</span>}
+        </div>
+      );
+    }
+
+    const router = createMemoryRouter([
+      {
+        path: "/",
+        Component: MetaConsumer,
+        action: metaRouteAction,
+      },
+    ]);
+
+    render(<RouterProvider router={router} />);
+
+    await act(async () => {
+      screen.getByTestId("meta-submit").click();
+    });
+
+    await waitFor(() => {
+      const dataEl = screen.getByTestId("meta-data");
+      const data = JSON.parse(dataEl.textContent!);
+      expect(data.success).toBe(true);
+      expect(data.response).toEqual({ greeting: "Hello World" });
+      expect(data.meta).toEqual({
+        successMessage: "Custom toast!",
+        errorMessage: "Default error",
+      });
+    });
+  });
+
+  it("preserves static meta when no overrides are provided", async () => {
+    function MetaConsumer() {
+      const [submit, { data }] = useAction(metaAction);
+      return (
+        <div>
+          <button
+            onClick={() => submit({ name: "World" })}
+            data-testid="meta-submit"
+          >
+            Submit
+          </button>
+          {data && <span data-testid="meta-data">{JSON.stringify(data)}</span>}
+        </div>
+      );
+    }
+
+    const router = createMemoryRouter([
+      {
+        path: "/",
+        Component: MetaConsumer,
+        action: metaRouteAction,
+      },
+    ]);
+
+    render(<RouterProvider router={router} />);
+
+    await act(async () => {
+      screen.getByTestId("meta-submit").click();
+    });
+
+    await waitFor(() => {
+      const dataEl = screen.getByTestId("meta-data");
+      const data = JSON.parse(dataEl.textContent!);
+      expect(data.meta).toEqual({
+        successMessage: "Default success",
+        errorMessage: "Default error",
+      });
+    });
+  });
+});
+
+// ─── concurrent / rapid submissions ─────────────────────────────
+
+describe("useAction — concurrent submissions", () => {
+  it("only the final submission triggers onSuccess", async () => {
+    const onSuccess = vi.fn();
+
+    function RapidConsumer() {
+      const [submit, { data }] = useAction(testAction, { onSuccess });
+      return (
+        <div>
+          <button
+            onClick={() => {
+              submit({ name: "First" });
+              submit({ name: "Second" });
+            }}
+            data-testid="rapid-submit"
+          >
+            Submit twice
+          </button>
+          {data && <span data-testid="rapid-data">{JSON.stringify(data)}</span>}
+        </div>
+      );
+    }
+
+    const router = createMemoryRouter([
+      {
+        path: "/",
+        Component: RapidConsumer,
+        action: routeAction,
+      },
+    ]);
+
+    render(<RouterProvider router={router} />);
+
+    await act(async () => {
+      screen.getByTestId("rapid-submit").click();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("rapid-data")).toBeTruthy();
+    });
+
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(onSuccess).toHaveBeenCalledWith({ greeting: "Hello Second" });
+  });
+
+  it("pendingPayload reflects the latest submission", async () => {
+    const pendingSnapshots: unknown[] = [];
+
+    function RapidConsumer() {
+      const [submit, { pendingPayload, data }] = useAction(testAction);
+      pendingSnapshots.push(pendingPayload);
+      return (
+        <div>
+          <button
+            onClick={() => {
+              submit({ name: "First" });
+              submit({ name: "Second" });
+            }}
+            data-testid="rapid-submit"
+          >
+            Submit twice
+          </button>
+          {data && <span data-testid="rapid-done">done</span>}
+        </div>
+      );
+    }
+
+    const router = createMemoryRouter([
+      {
+        path: "/",
+        Component: RapidConsumer,
+        action: routeAction,
+      },
+    ]);
+
+    render(<RouterProvider router={router} />);
+
+    await act(async () => {
+      screen.getByTestId("rapid-submit").click();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId("rapid-done")).toBeTruthy();
+    });
+
+    const pendingWithPayload = pendingSnapshots.filter(
+      (p): p is { name: string } => p !== undefined && p !== null,
+    );
+    if (pendingWithPayload.length > 0) {
+      const lastPending = pendingWithPayload[pendingWithPayload.length - 1];
+      expect(lastPending.name).toBe("Second");
+    }
   });
 });

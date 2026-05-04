@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { defineAction } from "../define-action";
 import { createFormData, resolveFormData } from "../form-data";
-import { registerSlice, _resetRegistryForTesting } from "../registry";
+import { registerActions, _resetRegistryForTesting } from "../registry";
 import { withMetaOverrides } from "../with-meta-overrides";
 import { actionSuccess, actionFailure } from "../action-object";
 
@@ -108,7 +108,7 @@ const noMetaAction = defineAction({
 });
 
 beforeEach(() => {
-  registerSlice("factory-test", [
+  registerActions([
     createItem,
     deleteItem,
     dynamicAction,
@@ -143,7 +143,7 @@ describe("createFormData / resolveFormData round-trip", () => {
       type: "dateAction",
       resolve: (p: { ts: Date }) => p,
     });
-    registerSlice("factory-test-date", [dateAction]);
+    registerActions([dateAction]);
 
     const date = new Date("2025-06-15T12:00:00Z");
     const { formData } = createFormData(dateAction, { ts: date });
@@ -156,7 +156,7 @@ describe("createFormData / resolveFormData round-trip", () => {
       type: "fileAction",
       resolve: (p: { doc: File }) => ({ ok: true }),
     });
-    registerSlice("factory-test-file", [fileAction]);
+    registerActions([fileAction]);
 
     const file = new File(["content"], "test.txt", { type: "text/plain" });
     const { formData } = createFormData(fileAction, { doc: file });
@@ -390,94 +390,53 @@ describe("createFormData method passthrough", () => {
   });
 });
 
-// ─── registerSlice ──────────────────────────────────────────────
+// ─── registerActions ────────────────────────────────────────────
 
-describe("registerSlice", () => {
-  it("throws on duplicate action type within the same slice", () => {
+describe("registerActions", () => {
+  it("throws on duplicate action type within the same call", () => {
     const actionA = defineAction({
-      type: "duplicateWithinSlice",
+      type: "dupAction",
       resolve: () => "a",
     });
     const actionB = defineAction({
-      type: "duplicateWithinSlice",
+      type: "dupAction",
       resolve: () => "b",
     });
 
-    expect(() => registerSlice("dup-test", [actionA, actionB])).toThrow(
-      'Duplicate action type "duplicateWithinSlice" within slice "dup-test"',
+    expect(() => registerActions([actionA, actionB])).toThrow(
+      'Duplicate action type "dupAction"',
     );
-  });
-
-  it("throws on duplicate action type across different slices", () => {
-    const actionA = defineAction({
-      type: "crossSliceDup",
-      resolve: () => "a",
-    });
-    const actionB = defineAction({
-      type: "crossSliceDup",
-      resolve: () => "b",
-    });
-
-    registerSlice("slice-a", [actionA]);
-    expect(() => registerSlice("slice-b", [actionB])).toThrow(
-      'Action type "crossSliceDup" is already registered by slice "slice-a"',
-    );
-  });
-
-  it("allows re-registering the same slice name (HMR)", () => {
-    const action = defineAction({
-      type: "hmrAction",
-      resolve: () => "v1",
-    });
-
-    registerSlice("hmr-slice", [action]);
-
-    const actionV2 = defineAction({
-      type: "hmrAction",
-      resolve: () => "v2",
-    });
-
-    expect(() => registerSlice("hmr-slice", [actionV2])).not.toThrow();
-  });
-
-  it("clears old entries when re-registering a slice", () => {
-    const actionA = defineAction({
-      type: "sliceClearA",
-      resolve: () => "a",
-    });
-    const actionB = defineAction({
-      type: "sliceClearB",
-      resolve: () => "b",
-    });
-
-    registerSlice("clear-test", [actionA, actionB]);
-
-    const actionC = defineAction({
-      type: "sliceClearC",
-      resolve: () => "c",
-    });
-
-    registerSlice("clear-test", [actionC]);
-
-    const formDataA = new FormData();
-    formDataA.set("actionType", "sliceClearA");
-    formDataA.set("payload", '{"json":"{}"}');
-    expect(() => resolveFormData(formDataA)).toThrow(
-      'Unknown action type "sliceClearA"',
-    );
-
-    const formDataC = new FormData();
-    formDataC.set("actionType", "sliceClearC");
-    formDataC.set("payload", '{"json":"{}"}');
-    expect(() => resolveFormData(formDataC)).not.toThrow();
   });
 
   it("throws when registering a non-defineAction creator", () => {
     const fake = (() => {}) as any;
     fake.type = "fakeAction";
 
-    expect(() => registerSlice("fake-test", [fake])).toThrow(
+    expect(() => registerActions([fake])).toThrow(
       'missing its definition',
     );
+  });
+
+  it("registers multiple actions in a single call", () => {
+    const actionA = defineAction({
+      type: "multiA",
+      resolve: () => "a",
+    });
+    const actionB = defineAction({
+      type: "multiB",
+      resolve: () => "b",
+    });
+
+    registerActions([actionA, actionB]);
+
+    const fdA = new FormData();
+    fdA.set("actionType", "multiA");
+    fdA.set("payload", '{"json":"{}"}');
+    expect(() => resolveFormData(fdA)).not.toThrow();
+
+    const fdB = new FormData();
+    fdB.set("actionType", "multiB");
+    fdB.set("payload", '{"json":"{}"}');
+    expect(() => resolveFormData(fdB)).not.toThrow();
   });
 });

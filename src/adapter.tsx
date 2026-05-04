@@ -11,9 +11,9 @@ export interface UseActionOptions<TResult> {
   onError?: (error: unknown) => void;
 }
 
-export interface UseActionState<TResult, TPayload> {
+export interface UseActionState<TType extends string, TPayload, TResult, TContext, TMeta> {
   state: "idle" | "submitting" | "loading";
-  data: ActionResult<TResult> | undefined;
+  data: ActionResult<Action<TType, TPayload, TResult, TContext, TMeta>> | undefined;
   pendingPayload: TPayload | undefined;
 }
 
@@ -28,10 +28,11 @@ export function useAction<
   options?: UseActionOptions<TResult>,
 ): [
   submit: (payload: TPayload, meta?: Partial<TMeta>) => void,
-  state: UseActionState<TResult, TPayload>,
+  state: UseActionState<TType, TPayload, TResult, TContext, TMeta>,
 ] {
-  const fetcher = useFetcher<ActionResult<TResult>>();
-  const prevDataRef = useRef<ActionResult<TResult> | undefined>(undefined);
+  type Result = ActionResult<Action<TType, TPayload, TResult, TContext, TMeta>>;
+  const fetcher = useFetcher<Result>();
+  const prevDataRef = useRef<Result | undefined>(undefined);
 
   const latestRef = useRef({ action, options });
   latestRef.current = { action, options };

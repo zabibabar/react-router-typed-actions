@@ -1,19 +1,12 @@
 import { getDefinitionFor, type Action, type ActionDefinition } from "./define-action";
 
-interface RegistryEntry {
-  definition: ActionDefinition;
-  sliceName: string;
-}
+const _globalRegistry = new Map<string, ActionDefinition>();
 
-const _globalRegistry = new Map<string, RegistryEntry>();
-
-export function registerSlice(
-  sliceName: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- existential erasure: heterogeneous array of differently-typed actions
-  creators: Action<string, any, any, any, any>[],
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- existential erasure: heterogeneous array of differently-typed actions
+export function registerActions(
+  creators: readonly Action<string, any, any, any, any>[],
 ): void {
-  // 1. Validate all creators before mutating the registry
-  const pending: { type: string; definition: ActionDefinition }[] = [];
+  const seen = new Set<string>();
 
   for (const creator of creators) {
     const def = getDefinitionFor(creator);
@@ -24,47 +17,26 @@ export function registerSlice(
       );
     }
 
-    // Duplicate type within the same array
-    if (pending.some((p) => p.type === creator.type)) {
+    if (seen.has(creator.type)) {
       throw new Error(
-        `react-router-actions: Duplicate action type "${creator.type}" within slice "${sliceName}".`,
+        `react-router-actions: Duplicate action type "${creator.type}" in registerActions() call.`,
       );
     }
+    seen.add(creator.type);
 
-    // Duplicate type across a different slice
-    const existing = _globalRegistry.get(creator.type);
-    if (existing && existing.sliceName !== sliceName) {
-      throw new Error(
-        `react-router-actions: Action type "${creator.type}" is already registered ` +
-          `by slice "${existing.sliceName}". Each action type must be unique across slices.`,
-      );
-    }
-
-    pending.push({ type: creator.type, definition: def });
-  }
-
-  // 2. Clear all entries belonging to this slice (HMR-safe overwrite)
-  for (const [type, entry] of _globalRegistry) {
-    if (entry.sliceName === sliceName) {
-      _globalRegistry.delete(type);
-    }
-  }
-
-  // 3. Register the new entries
-  for (const { type, definition } of pending) {
-    _globalRegistry.set(type, { definition, sliceName });
+    _globalRegistry.set(creator.type, def);
   }
 }
 
 export function getDefinition(type: string): ActionDefinition {
-  const entry = _globalRegistry.get(type);
-  if (!entry) {
+  const def = _globalRegistry.get(type);
+  if (!def) {
     throw new Error(
       `react-router-actions: Unknown action type "${type}". ` +
-        "Ensure a registerSlice() call including this action has executed.",
+        "Ensure a registerActions() call including this action has executed.",
     );
   }
-  return entry.definition;
+  return def;
 }
 
 /** @internal Test-only — clears the global registry between test runs. */
