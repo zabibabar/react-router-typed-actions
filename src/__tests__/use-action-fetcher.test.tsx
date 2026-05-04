@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, act, waitFor, cleanup } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { defineAction } from "../define-action";
-import { useSubmitAction } from "../use-submit-action";
+import { useActionFetcher } from "../use-action-fetcher";
 import { resolveFormData } from "../form-data";
 import { registerActions, _resetRegistryForTesting } from "../registry";
 import { actionSuccess, actionFailure } from "../action-object";
@@ -88,7 +88,7 @@ function TestHookConsumer({
   onSuccess?: (result: { greeting: string }) => void;
   onError?: (error: unknown) => void;
 }) {
-  const [submit, { state, data }] = useSubmitAction(testAction, {
+  const [submit, { state, data }] = useActionFetcher(testAction, {
     onSuccess,
     onError,
   });
@@ -105,7 +105,7 @@ function TestHookConsumer({
 }
 
 function FailHookConsumer({ onError }: { onError?: (error: unknown) => void }) {
-  const [submit, { data }] = useSubmitAction(failAction, { onError });
+  const [submit, { data }] = useActionFetcher(failAction, { onError });
 
   return (
     <div>
@@ -120,15 +120,15 @@ function FailHookConsumer({ onError }: { onError?: (error: unknown) => void }) {
   );
 }
 
-// ─── useSubmitAction — no provider needed ─────────────────────────────
+// ─── useActionFetcher — no provider needed ─────────────────────────────
 
-describe("useSubmitAction — standalone (no provider)", () => {
+describe("useActionFetcher — standalone (no provider)", () => {
   it("does not throw when used without a provider", () => {
     const router = createMemoryRouter([
       {
         path: "/",
         Component: () => {
-          useSubmitAction(testAction);
+          useActionFetcher(testAction);
           return <span data-testid="ok">ok</span>;
         },
       },
@@ -141,12 +141,12 @@ describe("useSubmitAction — standalone (no provider)", () => {
 
 // ─── Integration tests ──────────────────────────────────────────
 
-describe("useSubmitAction — integration", () => {
+describe("useActionFetcher — integration", () => {
   it("returns a tuple of [submit, state]", () => {
     let tupleResult: unknown;
 
     function Inspector() {
-      const result = useSubmitAction(testAction);
+      const result = useActionFetcher(testAction);
       tupleResult = result;
       return null;
     }
@@ -171,7 +171,7 @@ describe("useSubmitAction — integration", () => {
     const submitRefs: Function[] = [];
 
     function Inspector() {
-      const [submit] = useSubmitAction(testAction);
+      const [submit] = useActionFetcher(testAction);
       submitRefs.push(submit);
       return <span data-testid="count">{submitRefs.length}</span>;
     }
@@ -206,7 +206,7 @@ describe("useSubmitAction — integration", () => {
     let capturedState: string | undefined;
 
     function Inspector() {
-      const [, { state }] = useSubmitAction(testAction);
+      const [, { state }] = useActionFetcher(testAction);
       capturedState = state;
       return null;
     }
@@ -323,7 +323,7 @@ describe("pendingPayload", () => {
     let capturedPending: unknown;
 
     function Inspector() {
-      const [, { pendingPayload }] = useSubmitAction(testAction);
+      const [, { pendingPayload }] = useActionFetcher(testAction);
       capturedPending = pendingPayload;
       return null;
     }
@@ -343,7 +343,7 @@ describe("pendingPayload", () => {
     const pendingSnapshots: unknown[] = [];
 
     function Inspector() {
-      const [submit, { pendingPayload, data }] = useSubmitAction(testAction);
+      const [submit, { pendingPayload, data }] = useActionFetcher(testAction);
       pendingSnapshots.push(pendingPayload);
       return (
         <div>
@@ -388,10 +388,10 @@ describe("pendingPayload", () => {
 
 // ─── submit with meta overrides ─────────────────────────────────
 
-describe("useSubmitAction — meta overrides on submit", () => {
+describe("useActionFetcher — meta overrides on submit", () => {
   it("passes submit-time meta overrides through to the route action", async () => {
     function MetaConsumer() {
-      const [submit, { data }] = useSubmitAction(metaAction);
+      const [submit, { data }] = useActionFetcher(metaAction);
       return (
         <div>
           <button
@@ -435,7 +435,7 @@ describe("useSubmitAction — meta overrides on submit", () => {
 
   it("preserves static meta when no overrides are provided", async () => {
     function MetaConsumer() {
-      const [submit, { data }] = useSubmitAction(metaAction);
+      const [submit, { data }] = useActionFetcher(metaAction);
       return (
         <div>
           <button
@@ -476,12 +476,12 @@ describe("useSubmitAction — meta overrides on submit", () => {
 
 // ─── concurrent / rapid submissions ─────────────────────────────
 
-describe("useSubmitAction — concurrent submissions", () => {
+describe("useActionFetcher — concurrent submissions", () => {
   it("only the final submission triggers onSuccess", async () => {
     const onSuccess = vi.fn();
 
     function RapidConsumer() {
-      const [submit, { data }] = useSubmitAction(testAction, { onSuccess });
+      const [submit, { data }] = useActionFetcher(testAction, { onSuccess });
       return (
         <div>
           <button
@@ -524,7 +524,7 @@ describe("useSubmitAction — concurrent submissions", () => {
     const pendingSnapshots: unknown[] = [];
 
     function RapidConsumer() {
-      const [submit, { pendingPayload, data }] = useSubmitAction(testAction);
+      const [submit, { pendingPayload, data }] = useActionFetcher(testAction);
       pendingSnapshots.push(pendingPayload);
       return (
         <div>

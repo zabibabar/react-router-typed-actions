@@ -4,14 +4,14 @@ import type { Action } from "./define-action";
 import type { ActionResult } from "./action-object";
 import { createFormData, deserializePayload } from "./form-data";
 
-// ─── useAction hook ──────────────────────────────────────────────
-export interface UseActionOptions<TResult> {
+// ─── useActionFetcher hook ───────────────────────────────────────
+export interface UseActionFetcherOptions<TResult> {
   fetcherOptions?: FetcherSubmitOptions;
   onSuccess?: (result: TResult) => void;
   onError?: (error: unknown) => void;
 }
 
-export interface UseActionState<
+export interface UseActionFetcherState<
   TType extends string,
   TPayload,
   TResult,
@@ -25,7 +25,7 @@ export interface UseActionState<
   pendingPayload: TPayload | undefined;
 }
 
-export function useSubmitAction<
+export function useActionFetcher<
   TType extends string,
   TPayload,
   TResult,
@@ -33,10 +33,10 @@ export function useSubmitAction<
   TMeta,
 >(
   action: Action<TType, TPayload, TResult, TContext, TMeta>,
-  options?: UseActionOptions<TResult>,
+  options?: UseActionFetcherOptions<TResult>,
 ): [
   submit: (payload: TPayload, meta?: Partial<TMeta>) => void,
-  state: UseActionState<TType, TPayload, TResult, TContext, TMeta>,
+  state: UseActionFetcherState<TType, TPayload, TResult, TContext, TMeta>,
 ] {
   type Result = ActionResult<Action<TType, TPayload, TResult, TContext, TMeta>>;
   const fetcher = useFetcher<Result>();

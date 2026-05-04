@@ -36,5 +36,8 @@ export { createFormData, resolveFormData } from "./form-data";
 
 // ─── React Router Adapter ────────────────────────────────────────
 
-export { useAction } from "./use-submit-action";
-export type { UseActionOptions, UseActionState } from "./use-submit-action";
+export { useActionFetcher } from "./use-action-fetcher";
+export type {
+  UseActionFetcherOptions,
+  UseActionFetcherState,
+} from "./use-action-fetcher";
