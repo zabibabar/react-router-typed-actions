@@ -167,6 +167,49 @@ describe("createFormData / resolveFormData round-trip", () => {
     expect((action.payload as { doc: File }).doc).toBeInstanceOf(Blob);
   });
 
+  it("round-trips mixed nested payload with files, arrays, null, and undefined", () => {
+    const nestedAction = defineAction({
+      type: "nestedMixedAction",
+      resolve: (p: unknown) => p,
+    });
+    registerActions([nestedAction]);
+
+    const avatar = new File(["avatar"], "avatar.png", { type: "image/png" });
+    const payload = {
+      profile: {
+        name: "Ava",
+        age: undefined,
+        avatar,
+      },
+      attachments: [new File(["a"], "a.txt"), null, { note: "ok" }],
+      empty: {},
+    };
+
+    const { formData } = createFormData(nestedAction, payload);
+    const action = resolveFormData(formData);
+    const result = action.payload as typeof payload;
+
+    expect(result.profile.name).toBe("Ava");
+    expect(result.profile.age).toBeUndefined();
+    expect(result.profile.avatar).toBe(avatar);
+    expect(result.attachments[0]).toBeInstanceOf(Blob);
+    expect(result.attachments[1]).toBeNull();
+    expect(result.attachments[2]).toEqual({ note: "ok" });
+    expect(result.empty).toEqual({});
+  });
+
+  it("round-trips an empty array payload", () => {
+    const arrayAction = defineAction({
+      type: "emptyArrayAction",
+      resolve: (p: unknown[]) => p,
+    });
+    registerActions([arrayAction]);
+
+    const { formData } = createFormData(arrayAction, []);
+    const action = resolveFormData(formData);
+    expect(action.payload).toEqual([]);
+  });
+
   it("works without registration (decoupled from registry)", () => {
     const standaloneAction = defineAction({
       type: "standaloneAction",

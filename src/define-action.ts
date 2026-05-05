@@ -1,15 +1,15 @@
-import { buildActionObject, type ActionObject } from "./action-object";
-import type { MetaOverrideResult } from "./with-meta-overrides";
+import { buildActionObject, type ActionObject } from "./action-object"
+import type { MetaOverrideResult } from "./with-meta-overrides"
 
 // ─── Core types ───────────────────────────────────────────────────
 
-export type ActionMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+export type ActionMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE"
 
 type ResolveReturn<TResult, TMeta> =
   | TResult
   | MetaOverrideResult<TResult, TMeta>
   | Promise<TResult>
-  | Promise<MetaOverrideResult<TResult, TMeta>>;
+  | Promise<MetaOverrideResult<TResult, TMeta>>
 
 export interface ActionDefinition<
   TType extends string = string,
@@ -18,13 +18,10 @@ export interface ActionDefinition<
   TContext = void,
   TMeta = void,
 > {
-  readonly type: TType;
-  readonly method: ActionMethod;
-  readonly resolve: (
-    payload: TPayload,
-    context: TContext,
-  ) => ResolveReturn<TResult, TMeta>;
-  readonly meta: TMeta;
+  readonly type: TType
+  readonly method: ActionMethod
+  readonly resolve: (payload: TPayload, context: TContext) => ResolveReturn<TResult, TMeta>
+  readonly meta: TMeta
 }
 
 // ─── Action ──────────────────────────────────────────────────────
@@ -36,39 +33,35 @@ export type Action<
   TContext = void,
   TMeta = void,
 > = {
-  (payload: TPayload): ActionObject<TResult, TContext, TMeta>;
-  readonly type: TType;
-  readonly method: ActionMethod;
-};
+  (payload: TPayload): ActionObject<TResult, TContext, TMeta>
+  readonly type: TType
+  readonly method: ActionMethod
+}
 
 // ─── Definition store (private) ───────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- existential erasure: heterogeneous map of differently-typed definitions
-const definitionStore = new WeakMap<Function, ActionDefinition<string, any, any, any, any>>();
+const definitionStore = new WeakMap<
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type -- function identity is used only as WeakMap key
+  Function,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- store intentionally erases generic parameters across heterogeneous actions
+  ActionDefinition<string, any, any, any, any>
+>()
 
 export function getDefinitionFor(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- existential erasure: accepts any Action regardless of generic params
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accepts any action creator generic shape
   creator: Action<string, any, any, any, any>,
-): ActionDefinition | undefined {
-  return definitionStore.get(creator);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- return type intentionally erased for heterogeneous store
+): ActionDefinition<string, any, any, any, any> | undefined {
+  return definitionStore.get(creator)
 }
 
 // ─── defineAction ─────────────────────────────────────────────────
 
-type DefineActionConfig<
-  TType extends string,
-  TPayload,
-  TResult,
-  TContext,
-  TMeta,
-> = {
-  type: TType;
-  method?: ActionMethod;
-  resolve: (
-    payload: TPayload,
-    context: TContext,
-  ) => ResolveReturn<TResult, TMeta>;
-} & ([TMeta] extends [void] ? { meta?: never } : { meta: TMeta });
+type DefineActionConfig<TType extends string, TPayload, TResult, TContext, TMeta> = {
+  type: TType
+  method?: ActionMethod
+  resolve: (payload: TPayload, context: TContext) => ResolveReturn<TResult, TMeta>
+} & ([TMeta] extends [void] ? { meta?: never } : { meta: TMeta })
 
 export function defineAction<
   TType extends string,
@@ -84,24 +77,21 @@ export function defineAction<
     method: config.method ?? "POST",
     resolve: config.resolve,
     meta: (config as { meta?: TMeta }).meta as TMeta,
-  };
+  }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- contravariant bypass: TPayload erased to any because buildActionObject receives payload as unknown
   const creator = ((payload: TPayload) =>
-    buildActionObject(definition as ActionDefinition<string, any, TResult, TContext, TMeta>, payload)) as Action<
-    TType,
-    TPayload,
-    TResult,
-    TContext,
-    TMeta
-  >;
+    buildActionObject(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- payload type is erased at runtime and consumed as unknown
+      definition as ActionDefinition<string, any, TResult, TContext, TMeta>,
+      payload,
+    )) as Action<TType, TPayload, TResult, TContext, TMeta>
 
   Object.assign(creator, {
     type: definition.type,
     method: definition.method,
-  });
+  })
 
-  definitionStore.set(creator, definition);
+  definitionStore.set(creator, definition)
 
-  return creator;
+  return creator
 }
