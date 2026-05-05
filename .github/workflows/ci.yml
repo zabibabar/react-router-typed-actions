@@ -14,8 +14,8 @@ jobs:
         # Keep CI aligned with current toolchain engine requirements.
         node-version: ["20.19.0", "22.12.0"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
