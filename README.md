@@ -45,20 +45,20 @@ Runtime requirements: `node >= 20.19.0`, `npm >= 10.0.0`.
 ### 1. Define actions
 
 ```typescript
-// domain/campaign/actions.ts
+// domain/todo/actions.ts
 import { defineAction } from "react-router-typed-actions";
 
-export const createCampaign = defineAction({
-  type: "campaign/create",
-  resolve: (payload: { name: string; budget: number }) =>
-    api.campaigns.create(payload),
+export const createTodo = defineAction({
+  type: "todo/create",
+  resolve: (payload: { title: string; priority: number }) =>
+    api.todos.create(payload),
 });
 
-export const deleteCampaign = defineAction({
-  type: "campaign/delete",
+export const deleteTodo = defineAction({
+  type: "todo/delete",
   method: "DELETE",
   resolve: (payload: { id: string }) =>
-    api.campaigns.delete(payload.id),
+    api.todos.delete(payload.id),
 });
 ```
 
@@ -67,10 +67,10 @@ export const deleteCampaign = defineAction({
 ```typescript
 // app/actions.ts
 import { registerActions } from "react-router-typed-actions";
-import { createCampaign, deleteCampaign } from "~/domain/campaign/actions";
-import { inviteCreator } from "~/domain/creator/actions";
+import { createTodo, deleteTodo } from "~/domain/todo/actions";
+import { addComment } from "~/domain/comment/actions";
 
-registerActions([createCampaign, deleteCampaign, inviteCreator]);
+registerActions([createTodo, deleteTodo, addComment]);
 ```
 
 Import this module from your root route (or any entry point) so registration runs before the first action is dispatched.
@@ -112,20 +112,20 @@ export async function clientAction(args: Route.ClientActionArgs) {
 
 ```tsx
 import { useActionFetcher } from "react-router-typed-actions";
-import { createCampaign } from "~/domain/campaign/actions";
+import { createTodo } from "~/domain/todo/actions";
 
-function CreateCampaignButton() {
-  const [submit, { state, data }] = useActionFetcher(createCampaign, {
-    onSuccess: (result) => navigate(`/campaigns/${result.id}`),
+function CreateTodoButton() {
+  const [submit, { state, data }] = useActionFetcher(createTodo, {
+    onSuccess: (result) => navigate(`/todos/${result.id}`),
     onError: (error) => toast.error(String(error)),
   });
 
   return (
     <button
-      onClick={() => submit({ name: "Summer", budget: 5000 })}
+      onClick={() => submit({ title: "Buy groceries", priority: 3 })}
       disabled={state !== "idle"}
     >
-      {state === "submitting" ? "Creating..." : "Create Campaign"}
+      {state === "submitting" ? "Creating..." : "Create Todo"}
     </button>
   );
 }
@@ -138,7 +138,7 @@ function CreateCampaignButton() {
 `pendingPayload` is deserialized from `fetcher.formData` and auto-clears on settlement. On error, the removed item reappears automatically.
 
 ```tsx
-const [submit, { pendingPayload }] = useActionFetcher(deleteCampaign);
+const [submit, { pendingPayload }] = useActionFetcher(deleteTodo);
 const pendingId = pendingPayload?.id ?? null;
 
 const visible = pendingId
@@ -151,8 +151,8 @@ const visible = pendingId
 Wire toasts inline — no `useEffect` needed:
 
 ```tsx
-const [submit] = useActionFetcher(createCampaign, {
-  onSuccess: () => toast.success("Campaign created!"),
+const [submit] = useActionFetcher(createTodo, {
+  onSuccess: () => toast.success("Todo created!"),
   onError: (err) => toast.error(String(err)),
 });
 ```
@@ -167,18 +167,18 @@ interface ToastMeta {
   errorMessage: string;
 }
 
-const createCampaign = defineAction<
-  "campaign/create",
-  { name: string },
+const createTodo = defineAction<
+  "todo/create",
+  { title: string },
   { id: string },
   void,
   ToastMeta
 >({
-  type: "campaign/create",
-  resolve: (payload) => api.campaigns.create(payload),
+  type: "todo/create",
+  resolve: (payload) => api.todos.create(payload),
   meta: {
-    successMessage: "Campaign created",
-    errorMessage: "Failed to create campaign",
+    successMessage: "Todo created",
+    errorMessage: "Failed to create todo",
   },
 });
 ```
@@ -188,26 +188,26 @@ Override meta dynamically from within `resolve` using `withMetaOverrides`:
 ```typescript
 import { defineAction, withMetaOverrides } from "react-router-typed-actions";
 
-const createCampaign = defineAction<
-  "campaign/create",
-  { name: string },
+const createTodo = defineAction<
+  "todo/create",
+  { title: string },
   { id: string },
   void,
   ToastMeta
 >({
-  type: "campaign/create",
+  type: "todo/create",
   resolve: async (payload) => {
-    const result = await api.campaigns.create(payload);
-    if (result.requiresApproval) {
+    const result = await api.todos.create(payload);
+    if (result.requiresReview) {
       return withMetaOverrides(result, {
-        successMessage: `"${payload.name}" created — pending approval`,
+        successMessage: `"${payload.title}" created — pending review`,
       });
     }
     return result;
   },
   meta: {
-    successMessage: "Campaign created",
-    errorMessage: "Failed to create campaign",
+    successMessage: "Todo created",
+    errorMessage: "Failed to create todo",
   },
 });
 ```
@@ -225,7 +225,7 @@ return actionSuccess(action, response);
 Define as many actions as you need — the route handler resolves the correct one by type:
 
 ```typescript
-registerActions([createCampaign, deleteCampaign, updateCampaign]);
+registerActions([createTodo, deleteTodo, updateTodo]);
 ```
 
 All share the same `clientAction` handler. No switch statement, no manual dispatch.
@@ -279,19 +279,19 @@ export async function action({ request }: Route.ActionArgs) {
 Call the action creator directly — it returns an `ActionObject` for use outside the fetcher path:
 
 ```typescript
-import { createCampaign } from "~/domain/campaign/actions";
+import { createTodo } from "~/domain/todo/actions";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
-function useCreateCampaign() {
+function useCreateTodo() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (payload: { name: string; budget: number }) => {
-      const action = createCampaign(payload);
+    mutationFn: async (payload: { title: string; priority: number }) => {
+      const action = createTodo(payload);
       return action.resolve();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+      queryClient.invalidateQueries({ queryKey: ["todos"] });
     },
   });
 }
