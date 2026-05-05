@@ -2,8 +2,8 @@ import { getDefinitionFor, type Action, type ActionDefinition } from "./define-a
 
 const _globalRegistry = new Map<string, ActionDefinition>();
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- existential erasure: heterogeneous array of differently-typed actions
 export function registerActions(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- registry stores heterogeneous action creators
   creators: readonly Action<string, any, any, any, any>[],
 ): void {
   const seen = new Set<string>();

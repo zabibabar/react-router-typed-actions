@@ -1,8 +1,24 @@
 # react-router-typed-actions
 
+[![CI](https://github.com/zabibabar/react-router-typed-actions/actions/workflows/ci.yml/badge.svg)](https://github.com/zabibabar/react-router-typed-actions/actions/workflows/ci.yml)
+[![Publish](https://github.com/zabibabar/react-router-typed-actions/actions/workflows/publish.yml/badge.svg)](https://github.com/zabibabar/react-router-typed-actions/actions/workflows/publish.yml)
+[![npm version](https://img.shields.io/npm/v/react-router-typed-actions)](https://www.npmjs.com/package/react-router-typed-actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 Type-safe, serializable actions for React Router.
 
 > **Note:** The `0.x` version does not mean this library is unstable or buggy — it is actively used in production. It signals that the API is open to community feedback before committing to a `1.0` contract. Issues, ideas, and pull requests are welcome.
+
+## Table of Contents
+
+- [The Problem](#the-problem)
+- [The Solution](#the-solution)
+- [Install](#install)
+- [Quick Start](#quick-start)
+- [Recipes](#recipes)
+- [Serialization](#serialization)
+- [API Reference](#api-reference)
+- [License](#license)
 
 ## The Problem
 
@@ -21,6 +37,8 @@ npm install react-router-typed-actions
 ```
 
 Peer dependencies: `react >= 18.0.0`, `react-router >= 7.0.0`.
+
+Runtime requirements: `node >= 20.19.0`, `npm >= 10.0.0`.
 
 ## Quick Start
 

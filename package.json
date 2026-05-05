@@ -21,12 +21,23 @@
   "files": [
     "dist"
   ],
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10.0.0"
+  },
+  "packageManager": "npm@10.9.0",
   "scripts": {
     "build": "tsup",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" --ignore-pattern \"src/__tests__/**\"",
+    "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix --ignore-pattern \"src/__tests__/**\"",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "prepare": "husky"
   },
   "keywords": [
     "react-router",
@@ -53,13 +64,19 @@
     "@types/node": "^22.15.18",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.2.3",
+    "@vitest/coverage-v8": "^3.2.4",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
     "happy-dom": "^20.9.0",
+    "husky": "^9.1.7",
     "jsdom": "^29.1.1",
+    "prettier": "^3.8.3",
     "react": "^19.0.0",
     "react-dom": "^19.2.5",
     "react-router": "^7.6.1",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",
+    "typescript-eslint": "^8.59.2",
     "vitest": "^3.1.4"
   },
   "dependencies": {

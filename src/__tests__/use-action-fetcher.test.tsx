@@ -26,6 +26,13 @@ const failAction = defineAction({
   },
 });
 
+const failWithStringAction = defineAction({
+  type: "failWithStringAction",
+  resolve: () => {
+    throw "boom-string";
+  },
+});
+
 interface NotifyMeta {
   successMessage: string;
   errorMessage: string;
@@ -47,7 +54,7 @@ const metaAction = defineAction<
 });
 
 beforeEach(() => {
-  registerActions([testAction, failAction, metaAction]);
+  registerActions([testAction, failAction, failWithStringAction, metaAction]);
 });
 
 afterEach(() => {
@@ -116,6 +123,26 @@ function FailHookConsumer({ onError }: { onError?: (error: unknown) => void }) {
         Fail
       </button>
       {data && <span data-testid="fail-data">{JSON.stringify(data)}</span>}
+    </div>
+  );
+}
+
+function FailStringHookConsumer({
+  onError,
+}: {
+  onError?: (error: unknown) => void;
+}) {
+  const [submit, { data }] = useActionFetcher(failWithStringAction, { onError });
+
+  return (
+    <div>
+      <button
+        onClick={() => submit(undefined as never)}
+        data-testid="fail-string-submit"
+      >
+        Fail string
+      </button>
+      {data && <span data-testid="fail-string-data">{JSON.stringify(data)}</span>}
     </div>
   );
 }
@@ -312,6 +339,29 @@ describe("useActionFetcher — integration", () => {
     await waitFor(() => {
       expect(onError).toHaveBeenCalledTimes(1);
       expect(onError).toHaveBeenCalledWith(expect.stringContaining("Boom"));
+    });
+  });
+
+  it("onError preserves non-Error throwables", async () => {
+    const onError = vi.fn();
+
+    const router = createMemoryRouter([
+      {
+        path: "/",
+        Component: () => <FailStringHookConsumer onError={onError} />,
+        action: routeAction,
+      },
+    ]);
+
+    render(<RouterProvider router={router} />);
+
+    await act(async () => {
+      screen.getByTestId("fail-string-submit").click();
+    });
+
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledTimes(1);
+      expect(onError).toHaveBeenCalledWith("boom-string");
     });
   });
 });
