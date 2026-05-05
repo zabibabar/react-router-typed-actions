@@ -7,6 +7,7 @@ export type { Action, ActionDefinition, ActionMethod } from "./define-action";
 
 /** Extract the resolved return type from an action creator. */
 export type ActionResultOf<T> =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- helper extracts TResult from any Action generic instance
   T extends Action<any, any, infer TResult, any, any>
     ? Awaited<TResult>
     : never;

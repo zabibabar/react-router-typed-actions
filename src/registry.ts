@@ -2,8 +2,8 @@ import { getDefinitionFor, type Action, type ActionDefinition } from "./define-a
 
 const _globalRegistry = new Map<string, ActionDefinition>();
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- existential erasure: heterogeneous array of differently-typed actions
 export function registerActions(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- registry stores heterogeneous action creators
   creators: readonly Action<string, any, any, any, any>[],
 ): void {
   const seen = new Set<string>();
@@ -12,14 +12,14 @@ export function registerActions(
     const def = getDefinitionFor(creator);
     if (!def) {
       throw new Error(
-        `react-router-actions: Action "${creator.type}" is missing its definition. ` +
+        `react-router-typed-actions: Action "${creator.type}" is missing its definition. ` +
           "Only creators produced by defineAction() can be registered.",
       );
     }
 
     if (seen.has(creator.type)) {
       throw new Error(
-        `react-router-actions: Duplicate action type "${creator.type}" in registerActions() call.`,
+        `react-router-typed-actions: Duplicate action type "${creator.type}" in registerActions() call.`,
       );
     }
     seen.add(creator.type);
@@ -32,7 +32,7 @@ export function getDefinition(type: string): ActionDefinition {
   const def = _globalRegistry.get(type);
   if (!def) {
     throw new Error(
-      `react-router-actions: Unknown action type "${type}". ` +
+      `react-router-typed-actions: Unknown action type "${type}". ` +
         "Ensure a registerActions() call including this action has executed.",
     );
   }

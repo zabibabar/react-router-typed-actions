@@ -169,4 +169,16 @@ describe("serialize/deserialize — edge cases", () => {
     }
     expect(() => serialize(deep)).toThrow("maximum nesting depth");
   });
+
+  it("throws for invalid encoded payload", () => {
+    expect(() => deserialize("not-json", [])).toThrow();
+  });
+
+  it("keeps file sentinel object when matching file is missing", () => {
+    const file = new File(["doc"], "doc.txt");
+    const { encoded } = serialize({ doc: file });
+
+    const result = deserialize(encoded, []) as { doc: unknown };
+    expect(result.doc).toEqual({ __file: "doc" });
+  });
 });

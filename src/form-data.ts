@@ -36,7 +36,7 @@ export function resolveFormData(formData: FormData): ActionObject<unknown, any, 
     typeof encodedPayload !== "string"
   ) {
     throw new Error(
-      "react-router-actions: Invalid FormData — missing actionType or payload.",
+      "react-router-typed-actions: Invalid FormData — missing actionType or payload.",
     );
   }
 

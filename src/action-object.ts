@@ -19,8 +19,11 @@ export interface ActionObject<
 
 // ─── ActionResult ─────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- wide constraint accepts any Action variant
-export type ActionResult<T extends Action<string, any, any, any, any> = Action<string, any, any, any, any>> =
+export type ActionResult<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- existential generic helper must support all Action parameterizations
+  T extends Action<string, any, any, any, any> = Action<string, any, any, any, any>,
+> =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- infer slots intentionally erase irrelevant generics
   T extends Action<infer TType, any, infer TResult, any, any>
     ? { type: TType; success: true; response: Awaited<TResult> }
     | { type: TType; success: false; error: unknown }
@@ -72,7 +75,7 @@ export function buildActionObject<
   TContext = void,
   TMeta = void,
 >(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- contravariant bypass: TPayload erased because payload is received as unknown
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- payload is accepted as unknown and forwarded to resolver
   def: ActionDefinition<string, any, TResult, TContext, TMeta>,
   payload: unknown,
   submitMeta?: Partial<TMeta>,
