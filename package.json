@@ -41,10 +41,15 @@
   },
   "keywords": [
     "react-router",
+    "remix",
     "actions",
     "type-safe",
     "typed-actions",
-    "form-data"
+    "form-data",
+    "formdata",
+    "useFetcher",
+    "serialization",
+    "superjson"
   ],
   "author": "Zabi Babar (https://github.com/zabibabar)",
   "license": "MIT",

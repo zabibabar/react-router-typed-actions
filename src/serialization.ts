@@ -40,7 +40,7 @@ function extractFiles(
 ): unknown {
   if (depth >= MAX_DEPTH) {
     throw new Error(
-      `react-router-actions: Payload exceeds maximum nesting depth of ${MAX_DEPTH}.`,
+      `react-router-typed-actions: Payload exceeds maximum nesting depth of ${MAX_DEPTH}.`,
     );
   }
 
@@ -96,7 +96,7 @@ function reinsertFiles(
 ): unknown {
   if (depth >= MAX_DEPTH) {
     throw new Error(
-      `react-router-actions: Payload exceeds maximum nesting depth of ${MAX_DEPTH}.`,
+      `react-router-typed-actions: Payload exceeds maximum nesting depth of ${MAX_DEPTH}.`,
     );
   }
 
