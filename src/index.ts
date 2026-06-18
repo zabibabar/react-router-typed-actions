@@ -42,3 +42,8 @@ export type {
   UseActionFetcherOptions,
   UseActionFetcherState,
 } from "./use-action-fetcher";
+
+// ─── Loader ─────────────────────────────────────────────────────
+
+export { createLoader } from "./create-loader";
+export type { Loader, CreateLoaderConfig } from "./create-loader";
